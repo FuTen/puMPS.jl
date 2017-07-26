@@ -708,7 +708,8 @@ The local Hamiltonian term is supplied as an open MPO `hMPO`, which is a vector 
 This MPO has a range of `n` sites. The `MPOTensor`s `h1` and `hn` must have outer MPO bond dimension 1.
 For a nearest-neighbour Hamiltonian, `n=2`.
 """
-function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, itr::Int; 
+function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Int;
+        tol::Float64=1e-6, 
         step::Float64=0.001, 
         grad_max_itr::Int=500,
         grad_sparse_inverse::Bool=false)
@@ -718,8 +719,9 @@ function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, itr::Int;
     
     grad_Ac = rand_MPSTensor(T, phys_dim(M), bond_dim(M)) #Used to initialise the BiCG solver
     stol = 1e-12
+    norm_grad = Inf
     
-    for k in 1:itr
+    for k in 1:maxitr
         println("Itr: $k")
         @time M, lambda, lambda_i = canonicalize_left!(M)
         
@@ -731,9 +733,8 @@ function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, itr::Int;
         En_prev = En
         @time step, En = line_search_energy(M, En, grad, norm_grad^2, min(max(step, 0.001),0.1), hMPO)
         println("$norm_grad, $step, $En, $(En-En_prev)")
-        if norm_grad < 1e-6
+        if norm_grad < tol
             break
-            @show k
         end
         
         Anew = mps_tensor(M) .- step .* grad
@@ -742,5 +743,5 @@ function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, itr::Int;
     end
     
     normalize!(M)
-    M
+    M, norm_grad
 end

@@ -1,7 +1,6 @@
 
 module MPS
 
-using PyCall
 using TensorOperations
 using NCon
 using LinearMaps
