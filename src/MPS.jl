@@ -489,7 +489,8 @@ function workvec_applyTM_MPO_r!{T}(work::Vector{T}, A::MPSTensor{T}, B::MPSTenso
     work = length(work) < len ? resize!(work, len) : work
 end
 
-workvec_applyTM_MPO_r{T}(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) = workvec_applyTM_MPO_r!(Vector{T}(), A, B, o, TM2)
+workvec_applyTM_MPO_r{T}(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) = 
+    workvec_applyTM_MPO_r!(Vector{T}(), A, B, o, TM2)
 
 function res_applyTM_MPO_r{T}(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T}
     Array{T,6}((bond_dim(A,1),size(o,1),bond_dim(B,1),size(TM2)[4:6]...))
