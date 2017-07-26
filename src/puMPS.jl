@@ -733,7 +733,7 @@ For a nearest-neighbour Hamiltonian, `n=2`.
 function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, itr::Int; 
         step::Float64=0.001, 
         grad_max_itr::Int=500,
-        grad_sparse_inverse::Bool=true)
+        grad_sparse_inverse::Bool=false)
     blkTMs = blockTMs(M)
     normalize!(M, blkTMs)
     En = real(expect(M, hMPO, blkTMs=blkTMs))
