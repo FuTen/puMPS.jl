@@ -46,7 +46,8 @@ set_mps_tensor!{T}(M::puMPState{T}, A::MPSTensor{T}) = M.A = A
     canonicalize_left!(M::puMPState; pinv_tol::Float64=1e-12)
 
 Modifies a puMPState in place via a gauge transformation to bring it into left-canonical form,
-returning the puMPState and the diagonal matrices of Schmidt coefficients.
+returning the puMPState and the diagonal matrices of what the Schmidt coefficients
+would be if this were an infinite system.
 """
 function canonicalize_left!(M::puMPState; pinv_tol::Float64=1e-12)
     A = mps_tensor(M)
