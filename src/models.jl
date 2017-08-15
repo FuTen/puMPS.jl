@@ -110,6 +110,8 @@ function ising_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; hz::Float64=1.0)
     n, Hn_OBC, Hn_b
 end
 
+#------------------------------
+
 """
 -(lamda*X1*X2 + delta1*X1*X3 + delta2*Z1*Z2 + hz*Z1)
 """
@@ -220,6 +222,41 @@ function ANNNI_PBC_MPO_split{T}(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0,
     (ANNNI_OBC_MPO(T, hz=hz, delta1=delta1, delta2=delta2, lambda=lambda), h_B)
 end
 
+function ANNNI_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; hz::Float64=1.0, delta1::Float64=0.0, delta2::Float64=0.0, lambda::Float64=1.0)
+    (hL, hM, hR), (hb1, hb2, hb3, hb4) = ANNNI_PBC_MPO_split(T, hz=hz, delta1=delta1, delta2=delta2, lambda=lambda)
+    
+    Z = [1.0 0.0; 0.0 -1.0]
+
+    hL[1,:,1,:] *= cis(n*2π/N)
+    hL[1,:,2,:] *= cis(n*1.5*2π/N)
+    hL[1,:,3,:] = -delta2 * cis(n*(1.5)*2π/N) * Z - hz * cis(n*2*2π/N) * I
+    hL[1,:,4,:] *= cis(n*2*2π/N)
+
+    get_hM = (j::Int)->begin
+        hM_j = copy(hM)
+        hM_j[5,:,2,:] *= cis(n*(j+0.5)*2π/N)
+        hM_j[5,:,3,:] = -delta2 * cis(n*(j+0.5)*2π/N) * Z - hz * cis(n*(j+1)*2π/N) * I
+        hM_j[5,:,4,:] *= cis(n*(j+1)*2π/N)
+        hM_j
+    end
+
+    Hn_OBC = MPOTensor{T}[hL, (get_hM(n) for n in 2:N-1)..., hR]
+
+    #Boundary MPO tensor for site N-1
+    hb1[1,:,1,:] *= cis(n*N*2π/N)
+
+    #Boundary tensor for site N
+    hb2[2,:,1,:] *= cis(n*0.5*2π/N)
+    hb2[2,:,2,:] = -delta2 * cis(n*0.5*2π/N) * Z
+    hb2[2,:,3,:] *= cis(n*1*2π/N)
+    
+    Hn_b = MPOTensor{T}[hb1, hb2, hb3, hb4]
+
+    n, Hn_OBC, Hn_b
+end
+
+#------------------------------
+
 function weylops(p::Int)
     om = cis(2π / p)
     U = diagm(Complex128[om^j for j in 0:p-1])
@@ -270,4 +307,30 @@ function potts3_PBC_MPO_split{T}(::Type{T}; h::Float64=1.0)::MPO_PBC_split{T}
     h_B = MPOTensor{T}[hL[:,:,2:3,:], hR[2:3,:,:,:]]
     
     ((hL, hM, hR), h_B)
+end
+
+function potts3_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; h::Float64=1.0)
+    (hL, hM, hR), (hb1, hb2) = potts3_PBC_MPO_split(T, h=h)
+    
+    hL[1,:,1,:] *= cis(n*2π/N)
+    hL[1,:,2,:] *= cis(n*1.5*2π/N)
+    hL[1,:,3,:] *= cis(n*1.5*2π/N)
+
+    hR[4,:,1,:] *= cis(n*N*2π/N)
+
+    get_hM = (j::Int)->begin
+        hM_j = copy(hM)
+        hM_j[4,:,1,:] *= cis(n*j*2π/N)
+        hM_j[4,:,2,:] *= cis(n*(j+0.5)*2π/N)
+        hM_j[4,:,3,:] *= cis(n*(j+0.5)*2π/N)
+        hM_j
+    end
+
+    Hn_OBC = MPOTensor{T}[hL, (get_hM(n) for n in 2:N-1)..., hR]
+
+    hb1 *= cis(n*0.5*2π/N)
+    
+    Hn_b = MPOTensor{T}[hb1, hb2]
+
+    n, Hn_OBC, Hn_b
 end
