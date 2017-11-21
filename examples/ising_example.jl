@@ -22,8 +22,8 @@ ens, ks, exs = excitations!(M, ising_PBC_MPO_split(Complex128), ks_tocompute, nu
 H1 = Hn_in_basis(M, ising_Hn_MPO_split(Complex128, 1, N), exs, ks_tocompute)
 H2 = Hn_in_basis(M, ising_Hn_MPO_split(Complex128, 2, N), exs, ks_tocompute)
 
-ind1 = indmin(real(ens))
-indT = indmax(abs(H2[:,ind1]))
+ind1 = indmin(real.(ens))
+indT = indmax(abs.(H2[:,ind1]))
 
 en1 = ens[ind1]
 enT = ens[indT]
