@@ -1,11 +1,11 @@
-function ising_local_MPO{T}(::Type{T}, shift::Float64=0.0; hz::Float64=1.0)::MPO_open{T}
+function ising_local_MPO{T}(::Type{T}, shift::Float64=0.0; hz::Float64=1.0, hx::Float64=0.0)::MPO_open{T}
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
     
     h1 = zeros(Float64, 2,2,1,2)
     h2 = zeros(Float64, 2,2,2,1)
     
-    h1[:,:,1,1] = -hz*Z + shift*I
+    h1[:,:,1,1] = -hz*Z - hx*X + shift*I
     h1[:,:,1,2] = -X
     
     h2[:,:,1,1] = eye(2)
@@ -20,7 +20,7 @@ function ising_local_MPO{T}(::Type{T}, shift::Float64=0.0; hz::Float64=1.0)::MPO
     MPOTensor{T}[h1, h2]
 end
 
-function ising_PBC_MPO{T}(::Type{T}; hz::Float64=1.0)::MPO_PBC_uniform{T}
+function ising_PBC_MPO{T}(::Type{T}; hz::Float64=1.0, hx::Float64=0.0)::MPO_PBC_uniform{T}
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
     
@@ -29,7 +29,7 @@ function ising_PBC_MPO{T}(::Type{T}; hz::Float64=1.0)::MPO_PBC_uniform{T}
     
     hM[:,:,1,1] = eye(2)
     hM[:,:,2,1] = X
-    hM[:,:,3,1] = -hz*Z
+    hM[:,:,3,1] = -hz*Z - hx*X
     hM[:,:,3,2] = -X
     hM[:,:,3,3] = eye(2)
     
@@ -45,7 +45,7 @@ function ising_PBC_MPO{T}(::Type{T}; hz::Float64=1.0)::MPO_PBC_uniform{T}
     (hB, hM)
 end
 
-function ising_OBC_MPO{T}(::Type{T}; hz::Float64=1.0)::MPO_open_uniform{T}
+function ising_OBC_MPO{T}(::Type{T}; hz::Float64=1.0, hx::Float64=0.0)::MPO_open_uniform{T}
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
     
@@ -53,7 +53,7 @@ function ising_OBC_MPO{T}(::Type{T}; hz::Float64=1.0)::MPO_open_uniform{T}
     
     hM[:,:,1,1] = eye(2)
     hM[:,:,2,1] = X
-    hM[:,:,3,1] = -hz*Z
+    hM[:,:,3,1] = -hz*Z - hx*X
     hM[:,:,3,2] = -X
     hM[:,:,3,3] = eye(2)
     
@@ -74,7 +74,7 @@ function ising_OBC_MPO{T}(::Type{T}; hz::Float64=1.0)::MPO_open_uniform{T}
     (hL, hM, hR)
 end
 
-function ising_PBC_MPO_split{T}(::Type{T}; hz::Float64=1.0)::MPO_PBC_split{T}
+function ising_PBC_MPO_split{T}(::Type{T}; hz::Float64=1.0, hx::Float64=0.0)::MPO_PBC_uniform_split{T}
     X = [0.0 1.0; 1.0 0.0]
     hL = reshape(-X.', (2,2,1,1))
     hR = reshape(X.', (2,2,1,1))
@@ -83,11 +83,11 @@ function ising_PBC_MPO_split{T}(::Type{T}; hz::Float64=1.0)::MPO_PBC_split{T}
     
     h_B = MPOTensor{T}[hL, hR]
     
-    (ising_OBC_MPO(T, hz=hz), h_B)
+    (ising_OBC_MPO(T, hz=hz, hx=hx), h_B)
 end
 
-function ising_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; hz::Float64=1.0)
-    (hL, hM, hR), (hb1, hb2) = ising_PBC_MPO_split(T, hz=hz)
+function ising_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; hz::Float64=1.0, hx::Float64=0.0)
+    (hL, hM, hR), (hb1, hb2) = ising_PBC_MPO_split(T, hz=hz, hx=hx)
     
     hL[1,:,1,:] *= cis(n*2π/N)
     hL[1,:,2,:] *= cis(n*1.5*2π/N)
@@ -107,7 +107,7 @@ function ising_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; hz::Float64=1.0)
     
     Hn_b = MPOTensor{T}[hb1, hb2]
 
-    n, Hn_OBC, Hn_b
+    n, (Hn_OBC, Hn_b)
 end
 
 #------------------------------
@@ -144,37 +144,6 @@ function ANNNI_local_MPO{T}(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, del
     MPOTensor{T}[h1, h2, h3]
 end
 
-#FIXME: Actually, we would need two boundary tensors for this!
-function ANNNI_PBC_MPO{T}(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta2::Float64=0.0, lambda::Float64=1.0)::MPO_PBC_uniform{T}
-    @assert false "This needs fixing!"
-    X = [0.0 1.0; 1.0 0.0]
-    Z = [1.0 0.0; 0.0 -1.0]
-    
-    hM = zeros(Float64, 2,2,5,5)
-    hB = zeros(Float64, 2,2,5,5)
-    
-    hM[:,:,1,1] = eye(2)
-    hM[:,:,2,1] = X
-    hM[:,:,3,1] = Z
-    hM[:,:,4,2] = eye(2)
-    hM[:,:,5,2] = -lambda*X
-    hM[:,:,5,3] = -delta2*Z-hz*I
-    hM[:,:,5,4] = -delta1*X
-    hM[:,:,5,5] = eye(2)
-    
-    hB[:,:,1,:] = hM[:,:,5,:]
-    hB[:,:,:,5] = hM[:,:,:,1]
-    hB[:,:,4,2] = eye(2)
-    
-    hM = permutedims(hM, (3,2,4,1)) #[m1,ket,m2,bra]
-    hB = permutedims(hB, (3,2,4,1)) #[m1,ket,m2,bra]
-    
-    hM = convert(MPOTensor{T}, hM)
-    hB = convert(MPOTensor{T}, hB)
-    
-    (hB, hM)
-end
-
 function ANNNI_OBC_MPO{T}(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta2::Float64=0.0, lambda::Float64=1.0)::MPO_open_uniform{T}
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
@@ -208,7 +177,8 @@ function ANNNI_OBC_MPO{T}(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta
     (hL, hM, hR)
 end
 
-function ANNNI_PBC_MPO_split{T}(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta2::Float64=0.0, lambda::Float64=1.0)::MPO_PBC_split{T}
+function ANNNI_PBC_MPO_split{T}(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta2::Float64=0.0, lambda::Float64=1.0)::MPO_PBC_uniform_split{T}
+    #Turn off hz for boundary terms, since they're already in the OBC part.
     hL, hM, hR = ANNNI_OBC_MPO(T, hz=0.0, delta1=delta1, delta2=delta2, lambda=lambda)
     
     #Pick out only the needed terms from the OBC Hamiltonian. Reduces the max. bond dimension to 3.
@@ -252,7 +222,7 @@ function ANNNI_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; hz::Float64=1.0, delta
     
     Hn_b = MPOTensor{T}[hb1, hb2, hb3, hb4]
 
-    n, Hn_OBC, Hn_b
+    n, (Hn_OBC, Hn_b)
 end
 
 #------------------------------
@@ -301,7 +271,7 @@ function potts3_local_MPO{T}(::Type{T}; h::Float64=1.0)
     MPOTensor{T}[hL[:,:,1:3,:], hR[1:3,:,:,:]]
 end
 
-function potts3_PBC_MPO_split{T}(::Type{T}; h::Float64=1.0)::MPO_PBC_split{T}
+function potts3_PBC_MPO_split{T}(::Type{T}; h::Float64=1.0)::MPO_PBC_uniform_split{T}
     hL, hM, hR = potts3_OBC_MPO(T, h=h)
     
     h_B = MPOTensor{T}[hL[:,:,2:3,:], hR[2:3,:,:,:]]
@@ -332,5 +302,5 @@ function potts3_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; h::Float64=1.0)
     
     Hn_b = MPOTensor{T}[hb1, hb2]
 
-    n, Hn_OBC, Hn_b
+    n, (Hn_OBC, Hn_b)
 end

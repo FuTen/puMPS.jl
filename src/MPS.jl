@@ -25,7 +25,7 @@ In pictures, for an `MPSTensor` `A`:
     2
 
 """
-typealias MPSTensor{T} Array{T,3}
+MPSTensor{T} = Array{T,3}
 
 bond_dim(A::MPSTensor, which::Int=1) = which == 1 ? size(A,1) : size(A,3)
 phys_dim(A::MPSTensor) = size(A,2)
@@ -35,13 +35,13 @@ mps_tensor_shape(d::Int, D1::Int, D2::Int) = (D1,d,D2)
 function randunitary{T}(::Type{T}, N::Int)::Matrix{T}
     if T <: Complex
         rT = real(T)
-        A = complex(randn(rT, N,N), randn(rT, N,N)) / √2
+        A = complex.(randn(rT, N,N), randn(rT, N,N)) / √2
     else
         A = randn(T, N,N)
     end
     Q, R = qr(A)
     r = diag(R)
-    L = diagm(r ./ abs(r))
+    L = diagm(r ./ abs.(r))
     Q*L
 end
 
@@ -55,7 +55,7 @@ function rand_MPSTensor{T}(::Type{T}, d::Int, D::Int)::MPSTensor{T}
     shp = mps_tensor_shape(d,D)
     if T <: Complex
         rT = real(T)
-        A = complex(randn(rT, shp), randn(rT, shp)) / √2
+        A = complex.(randn(rT, shp), randn(rT, shp)) / √2
     else
         A = randn(T, shp)
     end
@@ -71,12 +71,15 @@ Dense transfer matrix:
  2--conj(B)-4
 
 """
-typealias MPS_TM{T} Array{T,4} 
+MPS_TM{T} = Array{T,4} 
 
 Base.trace{T}(TM::MPS_TM{T}) = ncon(TM, (1,2,1,2))[1]
 
 function TM_dense(A::MPSTensor, B::MPSTensor)::MPS_TM
+    gc_enable(false)
     @tensor TM[lA,lB,rA,rB] := A[lA, s, rA] * conj(B[lB, s, rB]) #NOTE: This will generally allocate to do permutations!
+    gc_enable(true)
+    gc(false)
     TM
 end
 
@@ -136,11 +139,19 @@ function applyTM_l!{T}(TM21::MPS_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2:
 end
 
 function applyTM_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_TM{T})
+    gc_enable(false)
     @tensor TM21[lA,lB, rA,rB] := (TM2[lA,lB, mA,mB] * conj(B1[mB,s,rB])) * A1[mA,s,rA] #NOTE: Intermediates, final permutation.
+    gc_enable(true)
+    gc(false)
+    TM21
 end
 
 function applyTM_l(A::MPSTensor, B::MPSTensor, x::Matrix)
+    gc_enable(false)
     @tensor res[a, d] := conj(A[b, s, a]) * (x[b, c] * B[c, s, d]) #NOTE: This requires at least one intermediate array
+    gc_enable(true)
+    gc(false)
+    res
 end
 applyTM_l(A::MPSTensor, B::MPSTensor, x::Vector) = applyTM_l(A, B, reshape(x, (bond_dim(A), bond_dim(B))))
 
@@ -163,7 +174,7 @@ function tm_eigs_sparse{T}(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::
         f = (v::AbstractVector) -> vec(applyTM_r(A, B, copy!(x, v)))
     end
     
-    fmap = LinearMap(f, D*DB, T)
+    fmap = LinearMap{T}(f, D*DB)
     
     ev, eV, nconv, niter, nmult, resid = eigs(fmap, nev=nev, which=:LM, ritzvec=true, v0=vec(x0))
     
@@ -205,8 +216,8 @@ end
 function tm_dominant_eigs{T}(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=8)
     evl, evr, eVl, eVr = tm_eigs(A, B, 1, D_dense_max=D_dense_max)
     
-    indmaxl = findmax(abs(evl))[2]
-    indmaxr = findmax(abs(evr))[2]
+    indmaxl = findmax(abs(x) for x in evl)[2]
+    indmaxr = findmax(abs(x) for x in evr)[2]
     
     tol = sqrt(eps(real(T))) #If one of the checks hits this upper bound, something went horribly wrong!
     
@@ -260,7 +271,11 @@ function tm_dominant_eigs{T}(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=
 end
 
 function gauge_transform(A::MPSTensor, g::Matrix, gi::Matrix)
+    gc_enable(false)
     @tensor Anew[a,s,d] := g[a,b] * A[b,s,c] * gi[c,d] #NOTE: Requires a temporary array
+    gc_enable(true)
+    gc(false)
+    Anew
 end
 
 function canonicalize_left{T}(l::Matrix{T}, r::Matrix{T})
@@ -269,7 +284,7 @@ function canonicalize_left{T}(l::Matrix{T}, r::Matrix{T})
     evl, Ul = eig(Hermitian(l))
     vecnorm(Ul * Ul' - I) > tol && warn("Nonunintary eigenvectors.")
 
-    sevl = Diagonal(sqrt(complex(evl)))
+    sevl = Diagonal(sqrt.(complex.(evl)))
     g = sevl * Ul'
     gi = Ul * inv(sevl)
     
@@ -299,9 +314,9 @@ MPO tensor:
      |
      4
 """
-typealias MPOTensor{T} Array{T,4}
+MPOTensor{T} = Array{T,4}
 
-typealias MPO_open{T} Vector{MPOTensor{T}}
+MPO_open{T} = Vector{MPOTensor{T}}
 
 """
 Dense transfer matrix with MPO:
@@ -312,7 +327,7 @@ Dense transfer matrix with MPO:
       |
  3--conj(B)-6
 """
-typealias MPS_MPO_TM{T} Array{T,6}
+MPS_MPO_TM{T} = Array{T,6}
 
 Base.trace{T}(TM::MPS_MPO_TM{T}) = ncon(TM, (1,2,3,1,2,3))[1]
 
@@ -326,15 +341,27 @@ function TM_convert{T}(TM::MPS_MPO_TM{T})::MPS_TM{T}
 end
 
 function TM_dense_MPO(A::MPSTensor, B::MPSTensor, o::MPOTensor)::MPS_MPO_TM
+    gc_enable(false)
     @tensor TM[k1,m1,b1, k2,m2,b2] := (A[k1, s1, k2] * o[m1,s1,m2,t1]) * conj(B[b1, t1, b2])
+    gc_enable(true)
+    gc(false)
+    TM
 end
 
 function applyTM_MPO_l(A::MPSTensor, B::MPSTensor, o::MPOTensor, TM2::MPS_MPO_TM)::MPS_MPO_TM
+    gc_enable(false)
     @tensor TM21[k1,m1,b1, k3,m3,b3] := ((TM2[k1,m1,b1, k2,m2,b2] * conj(B[b2, t2, b3])) * o[m2,s2,m3,t2]) * A[k2, s2, k3]
+    gc_enable(true)
+    gc(false)
+    TM21
 end
 
 function applyTM_MPO_r(A::MPSTensor, B::MPSTensor, o::MPOTensor, TM2::MPS_MPO_TM)::MPS_MPO_TM
+    gc_enable(false)
     @tensor TM12[k1,m1,b1, k3,m3,b3] :=  conj(B[b1, t1, b2]) * (o[m1,s1,m2,t1] * (A[k1, s1, k2] * TM2[k2,m2,b2, k3,m3,b3]))
+    gc_enable(true)
+    gc(false)
+    TM12
 end
 
 function worklen_applyTM_MPO_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})

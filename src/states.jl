@@ -1,23 +1,30 @@
 """
     typealias MPO_PBC_uniform{T} Tuple{MPOTensor{T},MPOTensor{T}}
 
-One middle (bulk) tensor, one boundary tensor.
+A Matrix Product Operator (MPO) with one translation-invariant middle (bulk) tensor and one boundary tensor.
 """
-typealias MPO_PBC_uniform{T} Tuple{MPOTensor{T},MPOTensor{T}}
+MPO_PBC_uniform{T} = Tuple{MPOTensor{T},MPOTensor{T}}
 
 """
     typealias MPO_open_uniform{T} Tuple{MPOTensor{T},MPOTensor{T},MPOTensor{T}} 
 
-The left, middle (bulk), and right tensors of an OBC Hamiltonian.
+The left, middle (translation-invariant bulk), and right tensors of an MPO with open boundary conditions.
 """
-typealias MPO_open_uniform{T} Tuple{MPOTensor{T},MPOTensor{T},MPOTensor{T}} 
+MPO_open_uniform{T} = Tuple{MPOTensor{T},MPOTensor{T},MPOTensor{T}} 
 
 """
-    typealias MPO_PBC_split{T} Tuple{MPO_open_uniform{T}, MPO_open{T}}
+    typealias MPO_PBC_uniform_split{T} Tuple{MPO_open_uniform{T}, MPO_open{T}}
 
-An OBC Hamiltonian and a further open MPO describing the boundary terms. The sum is a circle Hamiltonian.
+An MPO for a circular system, split into an open uniform MPO for the bulk and a generic open MPO for the boundary.
 """
-typealias MPO_PBC_split{T} Tuple{MPO_open_uniform{T}, MPO_open{T}}
+MPO_PBC_uniform_split{T} = Tuple{MPO_open_uniform{T}, MPO_open{T}}
+
+"""
+typealias MPO_PBC_split{T} Tuple{MPO_open{T}, MPO_open{T}}
+
+An MPO for a circular system, split into an generic open MPO for the bulk and a generic open MPO for the boundary.
+"""
+MPO_PBC_split{T} = Tuple{MPO_open{T}, MPO_open{T}}
 
 
 """
@@ -59,7 +66,7 @@ function canonicalize_left!(M::puMPState; pinv_tol::Float64=1e-12)
     AL = gauge_transform(A, x, xi)
     set_mps_tensor!(M, AL)
     
-    lambda = Diagonal(sqrt(diag(rnew)))
+    lambda = Diagonal(sqrt.(diag(rnew)))
     
     lambda_i = pinv(lambda, pinv_tol)
     
@@ -473,6 +480,169 @@ function derivatives_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_T
     d_A
 end
 
+function eff_Ham_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Float64=0.0)
+    A = mps_tensor(M)
+    N = num_sites(M)
+    D = bond_dim(M)
+    
+    j = 1
+    TM = blkTMs[j]
+    
+    #Transfer matrix with one H term
+    TM_H = TM_convert(TM_dense_MPO(M, h))
+    
+    #Subtract energy density e0 * I.
+    #Note: We do this for each h term individually in order to avoid a larger subtraction later.
+    #Assumption: This is similarly accurate to subtracting I*e0 from the Hamiltonian itself.
+    #The transfer matrices typically have similar norm before and after subtraction, even when
+    #the final gradient has small physical norm.
+    LinAlg.axpy!(-e0, blkTMs[length(h)], TM_H) 
+    
+    TM_H_res = similar(TM_H)    
+    
+    work = workvec_applyTM_l(A, A)
+    
+    TMMPO_res = res_applyTM_MPO_l(M, h, TM)
+    workMPO = workvec_applyTM_MPO_l(M, h, vcat(MPS_MPO_TM{T}[TM_convert(TM)], TMMPO_res[1:end-1]))
+    
+    for k in length(h)+1:N-1 #leave out one site (where we take the derivative)
+        #Extend TM_H
+        applyTM_l!(TM_H_res, A, A, TM_H, work)
+        TM_H, TM_H_res = (TM_H_res, TM_H)
+        
+        #New H term
+        TM_H_add = applyTM_MPO_l!(TMMPO_res, M, h, TM, workMPO)
+        BLAS.axpy!(-e0, blkTMs[j+length(h)], TM_H_add) #Subtract energy density e0 * I
+        
+        j += 1
+        TM = blkTMs[j]
+        
+        BLAS.axpy!(1.0, TM_H_add, TM_H) #add new H term to TM_H
+    end
+    
+    #effective ham terms that do not act on gradient site
+    LinAlg.axpy!(-length(h)*e0, blkTMs[N-1], TM_H) #Subtract energy density for the final terms
+
+    e = eye(T, phys_dim(M))
+    @tensor Heff[Vb1, Pb, Vb2, Vt1, Pt, Vt2] := TM_H[Vt2,Vb2, Vt1,Vb1] * e[Pt, Pb]
+    
+    #NOTE: TM now has N-length(h) sites
+    TM = TM_convert(TM)
+    for n in 1:length(h)
+        TM_H = applyTM_MPO_l(M, h[1:n-1], TM, work=workMPO)
+        TM_H = applyTM_MPO_r(M, h[n+1:end], TM_H, work=workMPO)
+        hn = h[n]
+        @tensor Heff[Vb1, Pb, Vb2, Vt1, Pt, Vt2] += TM_H[Vt2,m2,Vb2, Vt1,m1,Vb1] * hn[m1,Pt,m2,Pb]
+    end
+    
+    Heff
+end
+
+function eff_Hams_Ac_C{T}(M::puMPState{T}, lambda_i::AbstractMatrix{T}, Heff::MPS_MPO_TM{T}, blkTM_Nm1::MPS_TM{T})
+    N = num_sites(M)
+    D = bond_dim(M)
+    d = phys_dim(M)
+
+    lambda_i = full(lambda_i)
+
+    #Heff is for the uniform tensors in M (usual in left canonical form)
+    @tensor Heff_Ac[V1b,Pb,V2b, V1t,Pt,V2t] := lambda_i[vb,V2b] * (Heff[V1b,Pb,vb, V1t,Pt,vt] * lambda_i[vt,V2t])
+
+    e = eye(d)
+    @tensor N_Ac_noe[V1b,V2b, V1t,V2t] := (lambda_i[vb,V2b] * (blkTM_Nm1[vt,vb, V1t,V1b] * lambda_i[vt,V2t]))
+    @tensor N_Ac[V1b,Pb,V2b, V1t,Pt,V2t] := N_Ac_noe[V1b,V2b, V1t,V2t] * e[Pb,Pt]
+
+    A = mps_tensor(M)
+    @tensor Heff_C[V1b,V2b, V1t,V2t] := A[vt,pt,V1t] * conj(A[vb,pb,V1b]) * Heff_Ac[vb,pb,V2b, vt,pt,V2t]
+    @tensor N_C[V1b,V2b, V1t,V2t] := A[vt,p,V1t] * conj(A[vb,p,V1b]) * N_Ac_noe[vb,V2b, vt,V2t]
+
+    Heff_Ac, N_Ac, Heff_C, N_C
+end
+
+function vumps_local_gnd{T,N,M}(X::Array{T,N}, Heff::Array{T,M}, Nmat::Array{T,M}, tol::Float64; ncv=20)
+    @assert M == 2N
+    Heff = reshape(Heff, (prod(size(Heff)[1:N]), prod(size(Heff)[N+1:2N])))
+    Nmat = reshape(Nmat, (prod(size(Nmat)[1:N]), prod(size(Nmat)[N+1:2N])))
+    ev, eV, nconv, niter, nmult, resid = eigs(Heff, Nmat, nev=1, ncv=ncv, which=:SR, ritzvec=true, v0=vec(X), tol=tol)
+    @show ev
+    reshape(eV[:,1], size(X))
+end
+
+function vumps_update_state{T}(Ac::MPSTensor{T}, C::Matrix{T})
+    d = phys_dim(Ac)
+    D = bond_dim(Ac)
+    Ul,sl,Vl = svd(reshape(Ac, (d*D, D)) * C')
+    Al = reshape(Ul * Vl', size(Ac))
+    
+    Ur,sr,Vr = svd(C' * reshape(Ac, (D, d*D)))
+    Ar = reshape(Ur * Vr', size(Ac))
+    
+    el = vecnorm(reshape(Ac, (d*D, D)) - reshape(Al, (d*D, D)) * C)
+    er = vecnorm(reshape(Ac, (D, d*D)) - C * reshape(Ar, (D, d*D)))
+    
+    Al, Ar, el, er
+end
+
+function vumps_opt!{T}(M::puMPState{T}, hMPO::MPO_open{T}, tol::Float64; maxitr::Int=100, ncv=20)
+    N = num_sites(M)
+    blkTMs = blockTMs(M)
+    normalize!(M, blkTMs)
+    En = real(expect(M, hMPO, blkTMs=blkTMs))
+    
+    stol = 1e-12
+    Ac_normgrad = Inf
+
+    @time M, C, Ci = canonicalize_left!(M)
+    C = full(C)
+    Ci = full(Ci)
+    Al = mps_tensor(M)
+    @tensor Ac[V1, P, V2] := Al[V1, P, v] * C[v, V2] 
+    
+    for k in 1:maxitr
+        println("Itr: $k")
+        
+        blkTMs = blockTMs(M)
+        En_prev = En
+        En = real(expect(M, hMPO, blkTMs=blkTMs))
+        Heff_Al = eff_Ham_1s(M, hMPO, blkTMs=blkTMs, e0=En)
+        Heff_Ac, N_Ac, Heff_C, N_C = eff_Hams_Ac_C(M, Ci, Heff_Al, blkTMs[N-1])
+
+        @tensor Ac_grad[V1,P,V2] := Heff_Ac[V1,P,V2, v1,p,v2] * Ac[v1,p,v2]
+        Ac_normgrad = vecnorm(Ac_grad)
+
+        @tensor C_grad[V1,V2] := Heff_C[V1,V2, v1,v2] * C[v1,v2]
+        C_normgrad = vecnorm(C_grad)
+
+        Ac_new = vumps_local_gnd(Ac, Heff_Ac, N_Ac, stol, ncv=ncv)
+        C_new = vumps_local_gnd(C, Heff_C, N_C, stol, ncv=ncv)
+
+        Al, Ar, el, er = vumps_update_state(Ac_new, C_new)
+        @show el
+
+        set_mps_tensor!(M, Al)
+        normalize!(M)
+        M, C, Ci = canonicalize_left!(M)
+        @show abs(C[1,1])
+        C = full(C)
+        Ci = full(Ci)
+
+        #scale!(Al, 1.0 / nrm^(1.0/num_sites(M)))
+        #set_mps_tensor!(M, Al)
+        #FIXME: Probably need to scale C_new
+        #normalize!(C_new)
+        #C = C_new
+        #Ci = pinv(C, 1e-12)
+        @tensor Ac[V1, P, V2] = Al[V1, P, v] * C[v, V2] 
+
+        println("$Ac_normgrad, $C_normgrad, $En, $(En-En_prev)")
+        if Ac_normgrad < tol
+            break
+        end
+    end
+
+    M, Ac_normgrad
+end
+
 function BiCGstab(M,V,X0,tol::Float64; max_itr::Int=100)
     #use BiCGSTAB, solve MX=V,with guess X0
     d = length(V)
@@ -591,11 +761,10 @@ function gradient_central{T}(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A
     
     d_Ac = ncon((d_A, inv_lambda), ((-1,-3,1), (1,-2))) # now size (D,D,d)
     
-    grad_Ac_init = permutedims(grad_Ac_init, (1,3,2)) # now size (D,D,d)
-    
     grad_Ac = zeros(d_Ac)
     
     if sparse_inverse
+        grad_Ac_init = tensorcopy(grad_Ac_init, [:a,:b,:c], [:a,:c,:b]) # now size (D,D,d)
         #Split the inverse problem along the physical dimension, since N acts trivially on that factor. Avoids constructing N x I.
         for s in 1:d
             grad_vec = BiCGstab(Nc, vec(view(d_Ac, :,:,s)), vec(view(grad_Ac_init, :,:,s)), tol, max_itr=max_itr)
@@ -615,7 +784,7 @@ function gradient_central{T}(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A
     
     norm_grad_A = sqrt(abs(dot(vec(grad_A), vec(d_A))))
     
-    grad_A, norm_grad_A, permutedims(grad_Ac, (1,3,2))
+    grad_A, norm_grad_A, tensorcopy(grad_Ac, [:a,:b,:c], [:a,:c,:b])
 end
 
 type EnergyHighException <: Exception
@@ -653,7 +822,7 @@ function line_search_energy{T}(M::puMPState{T}, En0::Float64, grad::MPSTensor{T}
         
         En = real(expect(M_new, hMPO, MPS_is_normalized=false)) #computes the norm and energy-density in one step
         
-        println("Linesearch: $stp, $En")
+        #println("Linesearch: $stp, $En")
 
         #Abort the search if the first step already increases the energy compared to the initial state
         num_calls == 1 && En > En0 && throw(EnergyHighException(stp, En))
@@ -713,7 +882,8 @@ function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::I
         tol::Float64=1e-6, 
         step::Float64=0.001, 
         grad_max_itr::Int=500,
-        grad_sparse_inverse::Bool=false)
+        grad_sparse_inverse::Bool=false,
+        use_phys_grad::Bool=true)
     blkTMs = blockTMs(M)
     normalize!(M, blkTMs)
     En = real(expect(M, hMPO, blkTMs=blkTMs))
@@ -723,26 +893,140 @@ function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::I
     norm_grad = Inf
     
     for k in 1:maxitr
-        println("Itr: $k")
-        @time M, lambda, lambda_i = canonicalize_left!(M)
+        M, lambda, lambda_i = canonicalize_left!(M)
         
-        @time blkTMs = blockTMs(M)
-        @time deriv = derivatives_1s(M, hMPO, blkTMs=blkTMs, e0=En)
-        @time grad, norm_grad, grad_Ac = gradient_central(M, lambda_i, deriv, sparse_inverse=grad_sparse_inverse, grad_Ac_init=grad_Ac, blkTMs=blkTMs, tol=stol, max_itr=grad_max_itr)
+        blkTMs = blockTMs(M)
+        deriv = derivatives_1s(M, hMPO, blkTMs=blkTMs, e0=En)
+
+        if use_phys_grad
+            grad, norm_grad, grad_Ac = gradient_central(M, lambda_i, deriv, sparse_inverse=grad_sparse_inverse, 
+                                                  grad_Ac_init=grad_Ac, blkTMs=blkTMs, tol=stol, max_itr=grad_max_itr)
+        else
+            grad = deriv
+            bTM_Nm1 = blkTMs[num_sites(M)-1]
+            @tensor ng2[] := deriv[vt1, p, vt2] * (conj(deriv[vb1, p, vb2]) * bTM_Nm1[vt2,vb2, vt1,vb1])
+            norm_grad = sqrt(real(scalar(ng2)))
+        end
         
-        stol = min(1e-6, max(norm_grad^2/10, 1e-12))
-        En_prev = En
-        @time step, En = line_search_energy(M, En, grad, norm_grad^2, min(max(step, 0.001),0.1), hMPO)
-        println("$norm_grad, $step, $En, $(En-En_prev)")
         if norm_grad < tol
             break
         end
+
+        stol = min(1e-6, max(norm_grad^2/10, 1e-12))
+        En_prev = En
+
+        step, En = line_search_energy(M, En, grad, norm_grad^2, min(max(step, 0.001),0.1), hMPO)
         
+        println("$k, $norm_grad, $step, $En, $(En-En_prev)")
+
         Anew = mps_tensor(M) .- step .* grad
         set_mps_tensor!(M, Anew)
-        @time normalize!(M)
+        normalize!(M)
     end
     
     normalize!(M)
     M, norm_grad
+end
+
+function minimize_energy_local_CG!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Int;
+    tol::Float64=1e-6, 
+    step::Float64=0.01, 
+    cg_steps_max::Int=10,
+    use_phys_grad::Bool=true)
+
+    blkTMs = blockTMs(M)
+    normalize!(M, blkTMs)
+    En = real(expect(M, hMPO, blkTMs=blkTMs))
+    En_prev = En
+
+    grad = nothing
+    step_dir = nothing
+    beta = 0.0
+    norm_grad = Inf
+
+    step_internal = step
+
+    cg_steps = 0
+
+    ts = fill!(zeros(maxitr), NaN)
+    ens = fill!(zeros(maxitr), NaN)
+    ngs = fill!(zeros(maxitr), NaN)
+    steps = fill!(zeros(maxitr), NaN)
+    betas = fill!(zeros(maxitr), NaN)
+
+    tic()
+    for k in 1:maxitr
+        if step_internal == 0.0
+            beta = 0.0
+        else
+            M, lambda, lambda_i = canonicalize_left!(M)
+            
+            blkTMs = blockTMs(M)
+            deriv = derivatives_1s(M, hMPO, blkTMs=blkTMs, e0=En)
+
+            norm_grad_prev = norm_grad
+            if use_phys_grad
+                grad, norm_grad, grad_Ac = gradient_central(M, lambda_i, deriv, sparse_inverse=false, 
+                                                                blkTMs=blkTMs)
+            else
+                grad = deriv
+                bTM_Nm1 = blkTMs[num_sites(M)-1]
+                @tensor ng2[] := deriv[vt1, p, vt2] * (conj(deriv[vb1, p, vb2]) * bTM_Nm1[vt2,vb2, vt1,vb1])
+                norm_grad = sqrt(real(scalar(ng2)))
+            end
+
+            beta = norm_grad^2 / norm_grad_prev^2
+        end
+        
+        if beta > 100.0
+            cg_steps_max > 1 && warn("Very large beta=$(beta), resetting CG after $cg_steps steps!")
+            beta = 0.0
+        end
+
+        if cg_steps == cg_steps_max
+            cg_steps_max > 1 && info("Max. CG steps reached, resetting CG.")
+            beta = 0.0
+        end
+
+        if step < 1e-5
+            cg_steps_max > 1 && warn("Previous step was very small, resetting CG after $cg_steps steps!")
+            beta = 0.0
+        end
+
+        step_dir = beta == 0.0 ? grad : grad + beta * step_dir #line search steps with -step_dir, hence grad, not -grad
+        cg_steps = beta == 0.0 ? 1 : cg_steps + 1
+
+        if beta == 0.0
+            step_internal = step
+        end
+        
+        En_prev = En
+        step_internal, En = line_search_energy(M, En, step_dir, norm_grad^2, min(max(step_internal, 0.001),0.1), hMPO,
+                                                        max_attempts=beta==0.0?3:1)
+        if En > En_prev && beta != 0.0
+            warn("Line search increased the energy, resetting CG after $cg_steps steps!")
+            step_internal = 0.0
+            En = En_prev
+            step_dir = grad
+        end
+        println("$k, $norm_grad, $step_internal, $En, $(En-En_prev)")
+        if norm_grad < tol
+            break
+        end
+        
+        ts[k] = toq()
+        betas[k] = beta
+        ngs[k] = norm_grad
+        ens[k] = En
+        steps[k] = step_internal
+
+        if step_internal != 0.0
+            Anew = mps_tensor(M) .- step_internal .* step_dir
+            set_mps_tensor!(M, Anew)
+            normalize!(M)
+        end
+    end
+
+    normalize!(M)
+    M, norm_grad, (ts, ens, ngs, steps, betas)
 end

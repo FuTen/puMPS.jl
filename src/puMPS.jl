@@ -12,12 +12,12 @@ export puMPState, rand_puMPState, mps_tensor, num_sites, set_mps_tensor!,
        apply_blockTM_l, blockTM_dense,
        expect_nn, expect,
        canonicalize_left!,
-       minimize_energy_local!
+       minimize_energy_local!, vumps_opt!
 
 include("states.jl")
 
-export excitations!, excitations, tangent_space_metric_and_hamiltonian, 
-       tangent_space_Hn, Hn_in_basis
+export excitations!, excitations, tangent_space_metric_and_MPO, 
+       Hn_in_basis, overlap, fidelity
 
 include("tangentspace.jl")
 
