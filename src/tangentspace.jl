@@ -313,46 +313,60 @@ function tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Ve
     A = mps_tensor(M)
     N = num_sites(M)
     d = phys_dim(M)
+    D = bond_dim(M)
     ps = 2π/N .* ks
 
-    Gs = Array{T,6}[ ncon((eye(d), blkTMs[N-1]),([-5,-2],[-6,-3,-4,-1])) ] #Add I on the physical index. This is the same-site term.
-    for j in 2:length(ps)
-        push!(Gs, copy(Gs[1]))
+    Gs = Array{T,6}[zeros(T, (D,d,D, D,d,D)) for j in 1:length(ks)]
+
+    #Add I on the physical index. This is the same-site term.
+    e = eye(d)
+    blk = blkTMs[N-1]
+    gc_enable(false)
+    @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] := e[Pt,Pb] * blk[V2t,V2b, V1t,V1b]
+    gc_enable(true)
+    gc(false)
+    for j in 1:length(ks)
+        BLAS.axpy!(N, Gpart, Gs[j])
     end
 
+    blk = blkTMs[N-2]
     gc_enable(false)
-    Gpart = ncon((A,conj(A), blkTMs[N-2]), ([2,-2,-4],[-3,-5,1],[-6,1,2,-1]))
+    @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = conj(A[V2b,Pt,vb]) * blk[V2t,vb, vt,V1b] * A[vt,Pb,V1t]
     gc_enable(true)
     gc(false)
     for j in 1:length(ps)
-        BLAS.axpy!(cis(ps[j]), Gpart, Gs[j])
+        BLAS.axpy!(N*cis(ps[j]), Gpart, Gs[j])
     end
 
+    left_T = zeros(T, (D, D,D, D,d))
+    right_T = zeros(T, (D,d,D, D,D))
     for i in 2:N-2
+        blk = blkTMs[i-1]
         gc_enable(false)
-        left_T = ncon((A, blkTMs[i-1]), ([-1,-2,1],[1,-3,-4,-5])) #gap on the top-left, then usual TM
+        @tensor left_T[V1b, V2t,V2b, V1t,Pt] = A[V1t,Pt,vt] * blk[vt,V1b, V2t,V2b]
         gc_enable(true)
+
+        blk = blkTMs[N-i-1]
         gc(false)
         gc_enable(false)
-        right_T = ncon((conj(A), blkTMs[N-i-1]), ([-3,-2,1],[-1,1,-4,-5])) #gap on the bottom-right
+        @tensor right_T[V1t,Pb,V1b, V2t,V2b] = conj(A[V1b,Pb,vb]) * blk[V1t,vb, V2t,V2b]
         gc_enable(true)
         gc(false)
 
         gc_enable(false)
-        Gpart = ncon((left_T, right_T), ([2,-2,-3,-4,1],[-6,-5,1,2,-1])) #complete loop, cost O(d^2 * D^6)
+        @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = left_T[V2b, V1t,vb, vt,Pb] * right_T[V2t,Pt,vb, vt,V1b] #complete loop, cost O(d^2 * D^6)
         gc_enable(true)
         gc(false)
         for j in 1:length(ps)
-            BLAS.axpy!(cis(ps[j]*i), Gpart, Gs[j])
+            BLAS.axpy!(N*cis(ps[j]*i), Gpart, Gs[j])
         end
     end
 
-    Gpart = ncon((A, blkTMs[N-2], conj(A)), ([-6,-2,2],[2,-3,-4,1],[1,-5,-1]))
+    blk = blkTMs[N-2]
+    @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = A[V2t,Pb,vt] * blk[vt,V2b,V1t,vb] * conj(A[vb,Pt,V1b])
     for j in 1:length(ps)
-        BLAS.axpy!(cis(ps[j]*(N-1)), Gpart, Gs[j])
+        BLAS.axpy!(N*cis(ps[j]*(N-1)), Gpart, Gs[j])
     end
-
-    tspace_ops_scale!(Gs, N)
 
     Gs
 end
