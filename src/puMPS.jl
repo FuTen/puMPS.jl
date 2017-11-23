@@ -16,7 +16,7 @@ export puMPState, rand_puMPState, mps_tensor, num_sites, set_mps_tensor!,
 
 include("states.jl")
 
-export excitations!, excitations, tangent_space_metric_and_MPO, 
+export excitations!, excitations, tangent_space_metric_and_MPO, tangent_space_MPO,
        Hn_in_basis, overlap, fidelity
 
 include("tangentspace.jl")
