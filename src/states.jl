@@ -384,7 +384,7 @@ function MPS.applyTM_MPO_r{T}(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T
     if length(O) > 0
         TMres = res_applyTM_MPO_r(A, A, O[end], TM)
         for n in length(O):-1:1
-            Mres = size(O[n],1) != size(O[n], 3) ? res_applyTM_MPO_r(A, A, O[n], TM) : TMres
+            TMres = size(O[n],1) != size(O[n], 3) ? res_applyTM_MPO_r(A, A, O[n], TM) : TMres
             workvec_applyTM_MPO_r!(work, A, A, O[n], TM)
             TM = applyTM_MPO_r!(TMres, A, A, O[n], TM, work)
         end
