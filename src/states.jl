@@ -747,11 +747,11 @@ function gradient_central{T}(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A
     T1 = TM_convert(length(blkTMs) >= N-1 ? blkTMs[N-1] : blockTM_dense(M, N-1))
     
     #Overlap matrix in central gauge (except for the identity on the physical dimension)
-    Nc = ncon((inv_lambda, inv_lambda, T1), ((-4,1), (-2,2), (1,2,-3,-1)))
+    @tensor Nc[b2,b1,t2,t1] := inv_lambda[t1,ti] * inv_lambda[b1,bi] * T1[ti,bi,t2,b2]
     Nc = reshape(Nc, (D^2, D^2))
     ## Note that above can also be obtained from the normalization process
     
-    d_Ac = ncon((d_A, inv_lambda), ((-1,-3,1), (1,-2))) # now size (D,D,d)
+    @tensor d_Ac[v1,v2,s] := d_A[v1,s,vi] * inv_lambda[vi,v2] # now size (D,D,d)
     
     grad_Ac = zeros(d_Ac)
     
@@ -772,7 +772,7 @@ function gradient_central{T}(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A
         end
     end
     
-    grad_A = ncon((grad_Ac, inv_lambda), ([-1,1,-2],[1,-3])) # back to (D,d,D)
+    @tensor grad_A[v1,s,v2] := grad_Ac[v1,vi,s] * inv_lambda[vi,v2] # back to (D,d,D)
     
     norm_grad_A = sqrt(abs(dot(vec(grad_A), vec(d_A))))
     

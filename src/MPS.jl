@@ -2,7 +2,6 @@
 module MPS
 
 using TensorOperations
-using NCon
 using LinearMaps
 
 export MPSTensor, bond_dim, phys_dim, mps_tensor, mps_tensor_shape, rand_MPSTensor_unitary, rand_MPSTensor,
@@ -102,7 +101,7 @@ MPS_TM{T} = Array{T,4}
 
 #Note: We will generally use MPS_MPO_TM for function arguments, providing functions to convert where possible.
 
-Base.trace{T}(TM::MPS_MPO_TM{T}) = ncon(TM, (1,2,3,1,2,3))[1]
+Base.trace{T}(TM::MPS_MPO_TM{T}) = scalar(@tensor tr[] := TM[t,m,b,t,m,b])
 
 #Turn the MPS TM into an MPS TM with (size 1) MPO indices
 TM_convert{T}(TM::MPS_TM{T}) = reshape(TM, (size(TM,1),1,size(TM,2), size(TM,3),1,size(TM,4)))::MPS_MPO_TM{T}
