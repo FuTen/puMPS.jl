@@ -143,18 +143,18 @@ function overlap{T}(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
 
     #Fix site numbering with O at sites 1..length(O)
 
-    TAA = length(TAA_all) > 0 ? TAA_all[1] : (length(O) > 0 ? TM_dense_MPO(A1, A2, O[1]) : TM_convert(TM_dense(A1, A2)))
+    TAA = length(TAA_all) > 0 ? TAA_all[1] : (length(O) > 0 ? TM_dense_MPO(A1, A2, O[1]) : TM_dense(A1, A2))
 
-    TBBs = length(O) > 0 ? TM_dense_MPO(B1, B2, O[1]) : TM_convert(TM_dense(B1, B2))
+    TBBs = length(O) > 0 ? TM_dense_MPO(B1, B2, O[1]) : TM_dense(B1, B2)
     scale!(TBBs, cis(p1-p2))
 
-    TABs = length(O) > 0 ? TM_dense_MPO(A1, B2, O[1]) : TM_convert(TM_dense(A1, B2))
+    TABs = length(O) > 0 ? TM_dense_MPO(A1, B2, O[1]) : TM_dense(A1, B2)
     scale!(TABs, cis(-p2))
 
     if length(TBAs_all) > 0
         TBAs = TBAs_all[1]
     else
-        TBAs = length(O) > 0 ? TM_dense_MPO(B1, A2, O[1]) : TM_convert(TM_dense(B1, A2))
+        TBAs = length(O) > 0 ? TM_dense_MPO(B1, A2, O[1]) : TM_dense(B1, A2)
         scale!(TBAs, cis(p1))
     end
 
@@ -185,11 +185,6 @@ function overlap{T}(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
     end
 
     if length(O) < N
-        TBBs = TM_convert(TBBs)
-        TABs = TM_convert(TABs)
-        TBAs = TM_convert(TBAs)
-        TAA = TM_convert(TAA)
-
         TMres = similar(TAA)
         for n in max(2, length(O)+1):N
             work = workvec_applyTM_l!(work, A1, A2, TAA)
@@ -259,9 +254,6 @@ function overlap_precomp_samestate{T}(O::MPO_open{T}, Tvec1::puMPSTvec{T})
     end
 
     if length(O) < N
-        TBAs = TM_convert(TBAs)
-        TAA = TM_convert(TAA)
-
         TMres = similar(TAA)
         for n in length(O)+1:N-1
             work = workvec_applyTM_l!(work, A1, A1, TAA)
@@ -282,6 +274,8 @@ end
     op_in_basis{T}(Tvec_basis::Vector{puMPSTvec{T}}, O::MPO_open{T})
 
 Compute the matrix elements of the operator `O` in the basis of tangent vectors `Tvec_basis`.
+
+CAUTION: Possibly broken?
 """
 function op_in_basis{T}(Tvec_basis::Vector{puMPSTvec{T}}, O::MPO_open{T})
     Nvec = length(Tvec_basis)
@@ -302,12 +296,12 @@ end
 
 
 """
-tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_TM{T}})
+tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}})
 
 Computes the physical metric induced on the tangent space of the puMPState `M` for the tangent-space
 momentum sectors specified in `ks`. The momenta are `ps = 2π/N .* ks` where `N = num_sites(M)`.
 """
-function tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_TM{T}})
+function tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}, L::Int=1)
     #Time cost O(N*d^2*D^6).. could save a factor of dD by implementing the sparse mat-vec operation, but then we'd add a factor Nitr
     #space cost O(N)
     A = mps_tensor(M)
@@ -318,38 +312,75 @@ function tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Ve
 
     Gs = Array{T,6}[zeros(T, (D,d,D, D,d,D)) for j in 1:length(ks)]
 
+    Gpart = zeros(T, (D,d,D, D,d,D))
+
     #Add I on the physical index. This is the same-site term.
-    e = eye(d)
-    blk = blkTMs[N-1]
-    gc_enable(false)
-    @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] := e[Pt,Pb] * blk[V2t,V2b, V1t,V1b]
-    gc_enable(true)
-    gc(false)
-    for j in 1:length(ks)
-        BLAS.axpy!(N, Gpart, Gs[j])
+    let e = eye(T, d^L), blk = TM_convert(blkTMs[N-L])
+        gc_enable(false)
+        @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = e[Pt,Pb] * blk[V2t,V2b, V1t,V1b]
+        gc_enable(true)
+        gc(false)
+        for j in 1:length(ks)
+            BLAS.axpy!(N, Gpart, Gs[j])
+        end
     end
 
-    blk = blkTMs[N-2]
-    gc_enable(false)
-    @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = conj(A[V2b,Pt,vb]) * blk[V2t,vb, vt,V1b] * A[vt,Pb,V1t]
-    gc_enable(true)
-    gc(false)
-    for j in 1:length(ps)
-        BLAS.axpy!(N*cis(ps[j]), Gpart, Gs[j])
+    #This deals with the terms where the gaps overlap or are neighbours.
+    Ablk = A
+    @show L
+    for j in 1:L
+        e = eye(T, d^(L-j))
+        blk = TM_convert(blkTMs[N-L-j])
+
+        gc_enable(false)
+        @tensor Gpart_pre[V1b,Pb,V2b, V1t,Pt,V2t] := Ablk[vt,Pb,V1t] * conj(Ablk[V2b,Pt,vb]) * blk[V2t,vb, vt,V1b]
+        gc_enable(true)
+        gc(false)
+
+        Gpart_r = reshape(Gpart, (D,d^j,d^(L-j),D, D,d^(L-j),d^j,D))
+        gc_enable(false)
+        @tensor Gpart_r[V1b,Pb1,Pb2,V2b, V1t,Pt1,Pt2,V2t] = Gpart_pre[V1b,Pb1,V2b, V1t,Pt2,V2t] * e[Pb2,Pt1]
+        gc_enable(true)
+        gc(false)
+
+        for k in 1:length(ps)
+            BLAS.axpy!(N*cis(ps[k]*L), Gpart, Gs[k])
+        end
+
+        gc_enable(false)
+        @tensor Gpart_pre[V1b,Pb,V2b, V1t,Pt,V2t] = Ablk[V2t,Pb,vt] * blk[vt,V2b,V1t,vb] * conj(Ablk[vb,Pt,V1b])
+        gc_enable(true)
+        gc(false)
+
+        Gpart_r = reshape(Gpart, (D,d^(L-j),d^j,D, D,d^j,d^(L-j),D))
+        gc_enable(false)
+        @tensor Gpart_r[V1b,Pb2,Pb1,V2b, V1t,Pt2,Pt1,V2t] = Gpart_pre[V1b,Pb1,V2b, V1t,Pt2,V2t] * e[Pb2,Pt1]
+        gc_enable(true)
+        gc(false)
+
+        for k in 1:length(ps)
+            BLAS.axpy!(N*cis(ps[k]*(N-L)), Gpart, Gs[k])
+        end
+
+        if j < L
+            @tensor Ablk[V1, P1,P2, V2] := Ablk[V1, P1, v] * A[v, P2, V2]
+            Ablk = reshape(Ablk, (D, d^j, D))
+        end
     end
 
+    #Now we handle terms where the gaps are separated: We need two block transfer matrices.
     left_T = zeros(T, (D, D,D, D,d))
     right_T = zeros(T, (D,d,D, D,D))
-    for i in 2:N-2
-        blk = blkTMs[i-1]
+    for i in 2L:N-2L
+        blk = TM_convert(blkTMs[i-1])
         gc_enable(false)
-        @tensor left_T[V1b, V2t,V2b, V1t,Pt] = A[V1t,Pt,vt] * blk[vt,V1b, V2t,V2b]
+        @tensor left_T[V1b, V2t,V2b, V1t,Pt] = Ablk[V1t,Pt,vt] * blk[vt,V1b, V2t,V2b]
         gc_enable(true)
-
-        blk = blkTMs[N-i-1]
         gc(false)
+
+        blk = TM_convert(blkTMs[N-i-1])
         gc_enable(false)
-        @tensor right_T[V1t,Pb,V1b, V2t,V2b] = conj(A[V1b,Pb,vb]) * blk[V1t,vb, V2t,V2b]
+        @tensor right_T[V1t,Pb,V1b, V2t,V2b] = conj(Ablk[V1b,Pb,vb]) * blk[V1t,vb, V2t,V2b]
         gc_enable(true)
         gc(false)
 
@@ -360,12 +391,6 @@ function tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Ve
         for j in 1:length(ps)
             BLAS.axpy!(N*cis(ps[j]*i), Gpart, Gs[j])
         end
-    end
-
-    blk = blkTMs[N-2]
-    @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = A[V2t,Pb,vt] * blk[vt,V2b,V1t,vb] * conj(A[vb,Pt,V1b])
-    for j in 1:length(ps)
-        BLAS.axpy!(N*cis(ps[j]*(N-1)), Gpart, Gs[j])
     end
 
     Gs
@@ -472,7 +497,7 @@ end
 
 #This will return the transfer matrix (TM) from site nL to site nR, given a boundary Hamiltonian centred at the
 #boundary between sites N and 1.
-function blockTM_MPO_boundary{T}(M::puMPState{T}, op_b::MPO_open{T}, blkTMs::Vector{MPS_TM{T}}, nL::Int, nR::Int)
+function blockTM_MPO_boundary{T}(M::puMPState{T}, op_b::MPO_open{T}, blkTMs::Vector{MPS_MPO_TM{T}}, nL::Int, nR::Int)
     A = mps_tensor(M)
     N = num_sites(M)
     Nop = length(op_b)
@@ -507,7 +532,7 @@ function blockTM_MPO_boundary{T}(M::puMPState{T}, op_b::MPO_open{T}, blkTMs::Vec
     Nmid = min(nR, N-NopR) - max(nL, NopL + 1) + 1 #length of middle TM (no h_b terms)
 
     if Nmid > 0
-        blk = TM_convert(blkTMs[Nmid])
+        blk = blkTMs[Nmid]
 
         #These will add MPO terms if needed:
         #Note: The index ranges may be empty, in which case applyTM_MPO_x() returns blk unmodified.
@@ -549,7 +574,7 @@ function op_term_MPO_boundary{T}(M::puMPState{T}, op_b::MPO_open{T}, n::Int)
 end
 
 """
-    tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op_b::MPO_open{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_TM{T}})
+    tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op_b::MPO_open{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}})
 
 Compute the boundary part of the effective MPO in the momentum sectors specified in `ks`.
 See `tangent_space_metric_and_MPO()`.
@@ -558,7 +583,7 @@ This is very similar to the OBC MPO case, except that we now have a
 short MPO `op_b` centred on the boundary between sites N and 1.
 """
 function tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op_b::MPO_open{T},
-                                        ks::Vector{<:Real}, blkTMs::Vector{MPS_TM{T}})
+                                        ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}})
     A = mps_tensor(M)
     N = num_sites(M)
     ps = 2π/N .* ks
