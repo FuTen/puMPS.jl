@@ -227,25 +227,37 @@ end
 
 #------------------------------
 
-function OBF_local_MPO{T}(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0)::MPO_open{T}
+function OBF_local_MPO{T}(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0,
+                            lambdaC::Float64=0.0)::MPO_open{T}
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
+    Y = [0.0im -1.0im; 1.0im 0.0im]
     e = eye(2)
     
-    h1 = zeros(Float64, 2,2,1,3)
-    h2 = zeros(Float64, 2,2,3,2)
-    h3 = zeros(Float64, 2,2,2,1)
+    Tin = (lambdaC == 0.0 ? Float64 : Complex128)
+    d = (lambdaC == 0.0 ? 2 : 3)
+
+    h1 = zeros(Tin, 2,2,1,3)
+    h2 = zeros(Tin, 2,2,3,d)
+    h3 = zeros(Tin, 2,2,d,1)
     
     h1[:,:,1,1] = lambda2*Z
     h1[:,:,1,2] = lambda2*X - lambda1*e
-    h1[:,:,1,3] = -lambda1*e
+    h1[:,:,1,3] = e
     
     h2[:,:,1,1] = Z
     h2[:,:,2,2] = Z
-    h2[:,:,3,1] = e
+    h2[:,:,3,1] = -lambda1*e
     
     h3[:,:,1,1] = X
     h3[:,:,2,1] = Z
+
+    if lambdaC != 0.0
+        h2[:,:,3,2] = lambdaC * Y
+        h2[:,:,3,3] = -lambdaC * Z
+
+        h3[:,:,3,1] = Y
+    end
     
     h1 = permutedims(h1, (3,2,4,1)) #[m1,ket,m2,bra]
     h2 = permutedims(h2, (3,2,4,1)) #[m1,ket,m2,bra]
@@ -258,26 +270,34 @@ function OBF_local_MPO{T}(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0)
     MPOTensor{T}[h1, h2, h3]
 end
 
-function OBF_OBC_MPO{T}(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0)::MPO_open_uniform{T}
+function OBF_OBC_MPO{T}(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0,
+                        lambdaC::Float64=0.0)::MPO_open_uniform{T}
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
+    Y = [0.0im -1.0im; 1.0im 0.0im]
     e = eye(2)
-    
-    hM = zeros(Float64, 2,2,6,6)
+
+    Tin = (lambdaC == 0.0 ? Float64 : Complex128)
+    hM = zeros(Tin, 2,2,6,6)
     
     hM[:,:,1,1] = e
     hM[:,:,2,1] = X
     hM[:,:,3,1] = Z
-    hM[:,:,4,2] = Z
+    hM[:,:,4,2] = lambda2*Z #Z
     hM[:,:,5,3] = Z
     hM[:,:,6,1] = -lambda1*X
     hM[:,:,6,3] = -lambda1*Z
-    hM[:,:,6,4] = lambda2*Z
+    hM[:,:,6,4] = Z #lambda2*Z
     hM[:,:,6,5] = lambda2*X
     hM[:,:,6,6] = e
+
+    if lambdaC != 0.0
+        hM[:,:,4,1] = -lambdaC*Y
+        hM[:,:,6,3] += lambdaC*Y
+    end
     
-    hL = zeros(Float64, 2,2,1,6)
-    hR = zeros(Float64, 2,2,6,1)
+    hL = zeros(Tin, 2,2,1,6)
+    hR = zeros(Tin, 2,2,6,1)
     
     hL[:,:,1,:] = hM[:,:,6,:]
     hR[:,:,:,1] = hM[:,:,:,1]
@@ -293,9 +313,9 @@ function OBF_OBC_MPO{T}(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0)::
     (hL, hM, hR)
 end
 
-function OBF_PBC_MPO_split{T}(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0)::MPO_PBC_uniform_split{T}
-    #Turn off hz for boundary terms, since they're already in the OBC part.
-    hL, hM, hR = OBF_OBC_MPO(T, lambda1=lambda1, lambda2=lambda2)
+function OBF_PBC_MPO_split{T}(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0,
+                                lambdaC::Float64=0.0)::MPO_PBC_uniform_split{T}
+    hL, hM, hR = OBF_OBC_MPO(T, lambda1=lambda1, lambda2=lambda2, lambdaC=lambdaC)
     
     #Pick out only the needed terms from the OBC Hamiltonian. Reduces the max. bond dimension to 3.
     hL = hL[:,:,4:6,:]
@@ -305,34 +325,46 @@ function OBF_PBC_MPO_split{T}(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=
     
     h_B = MPOTensor{T}[hL, hM1, hM2, hR]
     
-    (OBF_OBC_MPO(T, lambda1=lambda1, lambda2=lambda2), h_B)
+    (OBF_OBC_MPO(T, lambda1=lambda1, lambda2=lambda2, lambdaC=lambdaC), h_B)
 end
 
-function OBF_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; lambda1::Float64=1.0, lambda2::Float64=1.0)
+
+function OBF_Hn_MPO_split{T}(::Type{T}, n::Int, N::Int; lambda1::Float64=1.0, lambda2::Float64=1.0, 
+    ZZXoff::Number=5/4, XZZoff::Number=3/4)
     (hL, hM, hR), (hb1, hb2, hb3, hb4) = OBF_PBC_MPO_split(T, lambda1=lambda1, lambda2=lambda2)
     
     Z = [1.0 0.0; 0.0 -1.0]
 
     hL[1,:,1,:] *= cis(n*2π/N)
     hL[1,:,3,:] *= cis(n*1.5*2π/N)
-    hL[1,:,4:5,:] *= cis(n*2*2π/N)
+
+    #hL[1,:,4,:] *= cis(n*(1 + ZZXoff)*2π/N) #ZZX
+    hL[1,:,5,:] *= cis(n*(1 + XZZoff)*2π/N) #XZZ
 
     get_hM = (j::Int)->begin
         hM_j = copy(hM)
         hM_j[6,:,1,:] *= cis(n*j*2π/N)
         hM_j[6,:,3,:] *= cis(n*(j+0.5)*2π/N)
-        hM_j[6,:,4:5,:] *= cis(n*(j+1)*2π/N)
+        #hM_j[6,:,4,:] *= cis(n*(j+ZZXoff)*2π/N) #ZZX
+        hM_j[4,:,2,:] *= cis(n*(j-1+ZZXoff)*2π/N) #ZZX
+        hM_j[6,:,5,:] *= cis(n*(j+XZZoff)*2π/N) #XZZ
         hM_j
     end
 
     Hn_OBC = MPOTensor{T}[hL, (get_hM(n) for n in 2:N-1)..., hR]
 
+    #Boundary tensor for site N-1
+    #hb1[1,:,1,:] *= cis(n*(N-1 + ZZXoff)*2π/N) #ZXX
+    hb1[1,:,2,:] *= cis(n*(N-1 + XZZoff)*2π/N) #XXZ (N-1)
+
     #Boundary tensor for site N
     hb2[3,:,2,:] *= cis(n*0.5*2π/N)
-    hb2[3,:,3:4,:] *= cis(n*1*2π/N)
+    #hb2[3,:,3,:] *= cis(n*ZZXoff*2π/N) #ZZX
+    hb2[1,:,1,:] *= cis(n*(N-1 + ZZXoff)*2π/N) #ZZX (N-1)
+    hb2[3,:,4,:] *= cis(n*XZZoff*2π/N) #XXZ (N)
 
-    #Boundary tensor for site N-1
-    #hb1[1,:,1:2,:] *= cis(n*N*2π/N) (does nothing)
+    #Boundary tensor for site 1
+    hb3[3,:,2,:] *= cis(n*(ZZXoff)*2π/N) #ZZX (N)
     
     Hn_b = MPOTensor{T}[hb1, hb2, hb3, hb4]
 
