@@ -2,7 +2,6 @@
 module puMPS
 
 using TensorOperations
-using NCon
 using LinearMaps
 using Optim
 
