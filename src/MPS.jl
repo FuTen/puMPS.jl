@@ -378,8 +378,8 @@ function tm_dominant_eigs{T}(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=
     scale!(r, phase_r * sfac)
     
     #force exact Hermiticity
-    lh = 0.5(l + l')
-    rh = 0.5(r + r')
+    lh = (l + l')/2
+    rh = (r + r')/2
     
     lh = T <: Real ? real(lh) : lh
     rh = T <: Real ? real(rh) : rh
@@ -412,7 +412,7 @@ function canonicalize_left{T}(l::Matrix{T}, r::Matrix{T})
     gi = Ul * inv(sevl)
     
     r = g * Hermitian(r) * g'
-    r = Hermitian(0.5(r + r'))
+    r = Hermitian((r + r')/2)
     
     evr, Ur = eig(r)
     vecnorm(Ur * Ur' - I) > tol && warn("Nonunintary eigenvectors.")

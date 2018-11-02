@@ -50,13 +50,13 @@ num_sites(M::puMPState) = M.N
 set_mps_tensor!{T}(M::puMPState{T}, A::MPSTensor{T}) = M.A = A
 
 """
-    canonicalize_left!(M::puMPState; pinv_tol::Float64=1e-12)
+    canonicalize_left!(M::puMPState; pinv_tol::Real=1e-12)
 
 Modifies a puMPState in place via a gauge transformation to bring it into left-canonical form,
 returning the puMPState and the diagonal matrices of what the Schmidt coefficients
 would be if this were an infinite system.
 """
-function canonicalize_left!(M::puMPState; pinv_tol::Float64=1e-12)
+function canonicalize_left!(M::puMPState; pinv_tol::Real=1e-12)
     A = mps_tensor(M)
     
     dominant_ev, l, r = tm_dominant_eigs(A, A)
@@ -145,7 +145,7 @@ Normalizes the puMPState `M` in place, optionally reusing the precomputed
 `N`th power of the transfer matrix `TM_N`, where `N = num_sites(M)`.
 """
 function Base.normalize!{T}(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M)))
-    scale!(mps_tensor(M), 1.0 / norm(M, TM_N=TM_N)^(1.0/num_sites(M)) )
+    scale!(mps_tensor(M), T(1.0 / norm(M, TM_N=TM_N)^(1.0/num_sites(M))) )
     M
 end
     
@@ -160,9 +160,9 @@ function Base.normalize!{T}(M::puMPState{T}, blkTMs::Vector{MPS_MPO_TM{T}})
     N = num_sites(M)
     normM = norm(M, TM_N=blkTMs[N])
     
-    scale!(mps_tensor(M), 1.0 / normM^(1.0/N) )
+    scale!(mps_tensor(M), T(1.0 / normM^(1.0/N)) )
     for n in 1:N
-        scale!(blkTMs[n], 1.0 / normM^(2.0/n))
+        scale!(blkTMs[n], T(1.0 / normM^(2.0/n)) ) 
     end
     M, blkTMs
 end
@@ -393,7 +393,7 @@ function MPS.applyTM_MPO_r{T}(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T
 end
 
 """
-    derivatives_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Float64=0.0)
+    derivatives_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Real=zero(real(T)))
 
 This returns the energy derivatives with respect to the elements of the conjugate `conj(A)` of one
 tensor of the MPS `M`. This the same as the result of applying the effective Hamiltonian for one 
@@ -408,11 +408,13 @@ of the state: The Hamiltonian `H` becomes `H - e0 * I`.
 
 Pre-computed powers of the transfer matrix may be supplied as `blkTMs` to avoid recomputing them.
 """
-function derivatives_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Float64=0.0)
+function derivatives_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Real=0.0)
     A = mps_tensor(M)
     N = num_sites(M)
     D = bond_dim(M)
     
+    e0 = real(T)(e0) #will be used for scaling, so need it in the working precision
+
     j = 1
     TM = blkTMs[j]
     
@@ -445,7 +447,7 @@ function derivatives_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_M
         j += 1
         TM = blkTMs[j]
         
-        BLAS.axpy!(1.0, TM_H_add, TM_H) #add new H term to TM_H
+        BLAS.axpy!(real(T)(1.0), TM_H_add, TM_H) #add new H term to TM_H
     end
     
     #effective ham terms that do not act on gradient site
@@ -466,10 +468,12 @@ function derivatives_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_M
     d_A
 end
 
-function eff_Ham_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Float64=0.0)
+function eff_Ham_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Real=0.0)
     A = mps_tensor(M)
     N = num_sites(M)
     D = bond_dim(M)
+
+    e0 = real(T)(e0) #will be used for scaling, so need it in the working precision
     
     j = 1
     TM = blkTMs[j]
@@ -503,7 +507,7 @@ function eff_Ham_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_T
         j += 1
         TM = blkTMs[j]
         
-        BLAS.axpy!(1.0, TM_H_add, TM_H) #add new H term to TM_H
+        BLAS.axpy!(real(T)(1.0), TM_H_add, TM_H) #add new H term to TM_H
     end
     
     #effective ham terms that do not act on gradient site
@@ -547,7 +551,7 @@ function eff_Hams_Ac_C{T}(M::puMPState{T}, lambda_i::AbstractMatrix{T}, Heff::MP
     Heff_Ac, N_Ac, Heff_C, N_C
 end
 
-function vumps_local_gnd{T,N,M}(X::Array{T,N}, Heff::Array{T,M}, Nmat::Array{T,M}, tol::Float64; ncv=20)
+function vumps_local_gnd{T,N,M}(X::Array{T,N}, Heff::Array{T,M}, Nmat::Array{T,M}, tol::Real; ncv=20)
     @assert M == 2N
     Heff = reshape(Heff, (prod(size(Heff)[1:N]), prod(size(Heff)[N+1:2N])))
     Nmat = reshape(Nmat, (prod(size(Nmat)[1:N]), prod(size(Nmat)[N+1:2N])))
@@ -571,7 +575,7 @@ function vumps_update_state{T}(Ac::MPSTensor{T}, C::Matrix{T})
     Al, Ar, el, er
 end
 
-function vumps_opt!{T}(M::puMPState{T}, hMPO::MPO_open{T}, tol::Float64; maxitr::Int=100, ncv=20)
+function vumps_opt!{T}(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Int=100, ncv=20)
     N = num_sites(M)
     blkTMs = blockTMs(M)
     normalize!(M, blkTMs)
@@ -631,7 +635,7 @@ function vumps_opt!{T}(M::puMPState{T}, hMPO::MPO_open{T}, tol::Float64; maxitr:
     M, Ac_normgrad
 end
 
-function BiCGstab(M,V,X0,tol::Float64; max_itr::Int=100)
+function BiCGstab(M,V,X0,tol::Real; max_itr::Int=100)
     #use BiCGSTAB, solve MX=V,with guess X0
     d = length(V)
     r = V - M*X0
@@ -688,7 +692,7 @@ end
 #     SLA = nothing
 # end
 
-# function BiCGstab_scipy(M,V,X0,tol::Float64; max_itr::Int=100, max_attempts::Int=1)
+# function BiCGstab_scipy(M,V,X0,tol::Real; max_itr::Int=100, max_attempts::Int=1)
 #     res = nothing
 #     for j in 1:max_attempts
 #         res, info = SLA.bicgstab(M, V, X0, tol, maxiter=max_itr)
@@ -703,7 +707,7 @@ end
 #     res
 # end
 
-# function lGMRes_scipy(M,V,X0,tol::Float64; max_itr::Int=100)
+# function lGMRes_scipy(M,V,X0,tol::Real; max_itr::Int=100)
 #     res, info = SLA.lgmres(M, V, X0, tol, maxiter=max_itr)
 #     info < 0 && error("lGMRes failed due to illegal input or breakdown")
 #     info > 0 && warn("lGMRes did not converge (tol: $tol, max_itr: $max_itr)")
@@ -712,8 +716,8 @@ end
 
 """
     gradient_central{T}(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::MPSTensor{T};
-        sparse_inverse::Bool=true, pinv_tol::Float64=1e-12, 
-        max_itr::Int=500, tol::Float64=1e-12,
+        sparse_inverse::Bool=true, pinv_tol::Real=1e-12, 
+        max_itr::Int=500, tol::Real=1e-12,
         grad_Ac_init::MPSTensor{T}=rand_MPSTensor(T, phys_dim(M), bond_dim(M)),
         blkTMs::Vector{MPS_MPO_TM{T}}=MPS_MPO_TM{T}[])
 
@@ -730,8 +734,8 @@ Otherwise it is computed implicitly using the BiCGStab solver at cost O(`bond_di
 The physical norm of the gradient is also computed and returned.
 """
 function gradient_central{T}(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::MPSTensor{T}; 
-        sparse_inverse::Bool=true, pinv_tol::Float64=1e-12, 
-        max_itr::Int=500, tol::Float64=1e-12,
+        sparse_inverse::Bool=true, pinv_tol::Real=1e-12,
+        max_itr::Int=500, tol::Real=1e-12,
         grad_Ac_init::MPSTensor{T}=rand_MPSTensor(T, phys_dim(M), bond_dim(M)),
         blkTMs::Vector{MPS_MPO_TM{T}}=MPS_MPO_TM{T}[])
     N = num_sites(M)
@@ -775,17 +779,17 @@ function gradient_central{T}(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A
     grad_A, norm_grad_A, tensorcopy(grad_Ac, [:a,:b,:c], [:a,:c,:b])
 end
 
-type EnergyHighException <: Exception
-    stp::Float64
-    En::Float64
+struct EnergyHighException{T<:Real} <: Exception
+    stp::T
+    En::T
 end
-type WolfeAbortException <: Exception 
-    stp::Float64
-    En::Float64
+struct WolfeAbortException{T<:Real} <: Exception 
+    stp::T
+    En::T
 end
 
 """
-    line_search_energy{T}(M::puMPState{T}, En0::Float64, grad::MPSTensor{T}, grad_normsq::Float64, step::Float64, hMPO::MPO_open{T}; itr::Int=10, rel_tol::Float64=1e-1, max_attempts::Int=3, wolfe_c1::Float64=100.0)
+    line_search_energy{T}(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad_normsq::Real, step::Real, hMPO::MPO_open{T}; itr::Int=10, rel_tol::Real=1e-1, max_attempts::Int=3, wolfe_c1::Real=100.0)
 
 Conducts a line search starting at the puMPState `M` to find the puMPState closest to the energetic minimum along 
 the search-direction specified by `grad`.
@@ -798,7 +802,9 @@ Where they occur, they will typically be small compared to `step`.
 
 `hMPO` is the local Hamiltonian term in MPO form. It is used to compute the energy density.
 """
-function line_search_energy{T}(M::puMPState{T}, En0::Float64, grad::MPSTensor{T}, grad_normsq::Float64, step::Float64, hMPO::MPO_open{T}; itr::Int=10, rel_tol::Float64=1e-1, max_attempts::Int=3, wolfe_c1::Float64=100.0)
+function line_search_energy{T}(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad_normsq::Real, step::Real, hMPO::MPO_open{T}; 
+        itr::Int=10, rel_tol::Real=1e-1, max_attempts::Int=3, wolfe_c1::Real=100.0
+    )
     M_new = copy(M)
     num_calls::Int = 0
     attempt::Int = 0
@@ -806,27 +812,29 @@ function line_search_energy{T}(M::puMPState{T}, En0::Float64, grad::MPSTensor{T}
     f = (stp::Float64)->begin
         num_calls += 1
         
-        set_mps_tensor!(M_new, mps_tensor(M) .- stp .* grad)
+        set_mps_tensor!(M_new, mps_tensor(M) .- real(T)(stp) .* grad)
         
         En = real(expect(M_new, hMPO, MPS_is_normalized=false)) #computes the norm and energy-density in one step
         
         #println("Linesearch: $stp, $En")
 
         #Abort the search if the first step already increases the energy compared to the initial state
-        num_calls == 1 && En > En0 && throw(EnergyHighException(stp, En))
+        num_calls == 1 && En > En0 && throw(EnergyHighException{Float64}(stp, Float64(En)))
         
         #Note: This is the first Wolfe condition, plus a minimum step size, since we don't want to compute the gradient...
         #Probably it effectively only serves to reduce the maximum step size reached, thus we turn it off by setting wolfe_c1=100.
-        stp > 1e-2 && En <= En0 - wolfe_c1 * stp * grad_normsq && throw(WolfeAbortException(stp, En))
+        stp > 1e-2 && En <= En0 - wolfe_c1 * stp * grad_normsq && throw(WolfeAbortException{Float64}(stp, En))
         
         En
     end
     
+    step = Float64(step)
+
     res = nothing
     while attempt <= max_attempts
         try
             attempt += 1
-            ores = optimize(f, step/5, step*1.8, Brent(), iterations=itr, rel_tol=rel_tol, store_trace=false, extended_trace=false)
+            ores = optimize(f, step/5, step*1.8, Brent(), iterations=itr, rel_tol=Float64(rel_tol), store_trace=false, extended_trace=false)
             res = Optim.minimizer(ores), Optim.minimum(ores)
             break
         catch e
@@ -855,7 +863,7 @@ end
 
 """
     minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, itr::Int; 
-        step::Float64=0.001, 
+        step::Real=0.001,
         grad_max_itr::Int=500,
         grad_sparse_inverse::Bool=true)
 
@@ -867,8 +875,8 @@ This MPO has a range of `n` sites. The `MPOTensor`s `h1` and `hn` must have oute
 For a nearest-neighbour Hamiltonian, `n=2`.
 """
 function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Int;
-        tol::Float64=1e-6, 
-        step::Float64=0.001, 
+        tol::Real=1e-6,
+        step::Real=0.001,
         grad_max_itr::Int=500,
         grad_sparse_inverse::Bool=false,
         use_phys_grad::Bool=true)
@@ -903,11 +911,12 @@ function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::I
         stol = min(1e-6, max(norm_grad^2/10, 1e-12))
         En_prev = En
 
-        step, En = line_search_energy(M, En, grad, norm_grad^2, min(max(step, 0.001),0.1), hMPO)
+        step_corr = min(max(step, 0.001),0.1)
+        step, En = line_search_energy(M, En, grad, norm_grad^2, step_corr, hMPO)
         
         println("$k, $norm_grad, $step, $En, $(En-En_prev)")
 
-        Anew = mps_tensor(M) .- step .* grad
+        Anew = mps_tensor(M) .- real(T)(step) .* grad
         set_mps_tensor!(M, Anew)
         normalize!(M)
     end
@@ -917,8 +926,8 @@ function minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::I
 end
 
 function minimize_energy_local_CG!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Int;
-    tol::Float64=1e-6, 
-    step::Float64=0.01, 
+    tol::Real=1e-6,
+    step::Real=0.01,
     cg_steps_max::Int=10,
     use_phys_grad::Bool=true)
 
@@ -944,7 +953,7 @@ function minimize_energy_local_CG!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr
 
     tic()
     for k in 1:maxitr
-        if step_internal == 0.0
+        if step_internal == 0
             beta = 0.0
         else
             M, lambda, lambda_i = canonicalize_left!(M)
@@ -966,7 +975,7 @@ function minimize_energy_local_CG!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr
             beta = norm_grad^2 / norm_grad_prev^2
         end
         
-        if beta > 100.0
+        if beta > 100
             cg_steps_max > 1 && warn("Very large beta=$(beta), resetting CG after $cg_steps steps!")
             beta = 0.0
         end
@@ -981,17 +990,18 @@ function minimize_energy_local_CG!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr
             beta = 0.0
         end
 
-        step_dir = beta == 0.0 ? grad : grad + beta * step_dir #line search steps with -step_dir, hence grad, not -grad
-        cg_steps = beta == 0.0 ? 1 : cg_steps + 1
+        step_dir = beta == 0 ? grad : grad + beta * step_dir #line search steps with -step_dir, hence grad, not -grad
+        cg_steps = beta == 0 ? 1 : cg_steps + 1
 
-        if beta == 0.0
+        if beta == 0
             step_internal = step
         end
         
         En_prev = En
-        step_internal, En = line_search_energy(M, En, step_dir, norm_grad^2, min(max(step_internal, 0.001),0.1), hMPO,
-                                                        max_attempts=beta==0.0?3:1)
-        if En > En_prev && beta != 0.0
+        step_corr = min(max(step_internal, 0.001),0.1)
+        step_internal, En = line_search_energy(M, En, step_dir, norm_grad^2, step_corr, hMPO,
+                                                        max_attempts=beta==0?3:1)
+        if En > En_prev && beta != 0
             warn("Line search increased the energy, resetting CG after $cg_steps steps!")
             step_internal = 0.0
             En = En_prev
@@ -1008,8 +1018,8 @@ function minimize_energy_local_CG!{T}(M::puMPState{T}, hMPO::MPO_open{T}, maxitr
         ens[k] = En
         steps[k] = step_internal
 
-        if step_internal != 0.0
-            Anew = mps_tensor(M) .- step_internal .* step_dir
+        if step_internal != 0
+            Anew = mps_tensor(M) .- real(T)(step_internal) .* step_dir
             set_mps_tensor!(M, Anew)
             normalize!(M)
         end
