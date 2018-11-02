@@ -1,6 +1,7 @@
 
 module MPS
 
+using LinearAlgebra
 using TensorOperations
 using LinearMaps
 
@@ -48,7 +49,7 @@ MPOTensor{T} = Array{T,4}
 struct IdentityMPOTensor
 end
 
-function randunitary{T}(::Type{T}, N::Int)::Matrix{T}
+function randunitary(::Type{T}, N::Int)::Matrix{T} where {T}
     if T <: Complex
         rT = real(T)
         A = complex.(randn(rT, N,N), randn(rT, N,N)) / √2
@@ -57,17 +58,17 @@ function randunitary{T}(::Type{T}, N::Int)::Matrix{T}
     end
     Q, R = qr(A)
     r = diag(R)
-    L = diagm(r ./ abs.(r))
+    L = diagm(0 => r ./ abs.(r))
     Q*L
 end
 
 #Note: An MPS generated this way already has r proportional to I and largest tm eigenvalue = 1
-function rand_MPSTensor_unitary{T}(::Type{T}, d::Int, D::Int)::MPSTensor{T}
+function rand_MPSTensor_unitary(::Type{T}, d::Int, D::Int)::MPSTensor{T} where {T}
     U = randunitary(T, d*D)
     reshape(U[1:D,:], mps_tensor_shape(d,D))
 end
 
-function rand_MPSTensor{T}(::Type{T}, d::Int, D::Int)::MPSTensor{T}
+function rand_MPSTensor(::Type{T}, d::Int, D::Int)::MPSTensor{T}  where {T}
     shp = mps_tensor_shape(d,D)
     if T <: Complex
         rT = real(T)
@@ -101,12 +102,12 @@ MPS_TM{T} = Array{T,4}
 
 #Note: We will generally use MPS_MPO_TM for function arguments, providing functions to convert where possible.
 
-Base.trace{T}(TM::MPS_MPO_TM{T}) = scalar(@tensor tr[] := TM[t,m,b,t,m,b])
+LinearAlgebra.tr(TM::MPS_MPO_TM{T}) where {T} = scalar(@tensor res[] := TM[t,m,b,t,m,b])
 
 #Turn the MPS TM into an MPS TM with (size 1) MPO indices
-TM_convert{T}(TM::MPS_TM{T}) = reshape(TM, (size(TM,1),1,size(TM,2), size(TM,3),1,size(TM,4)))::MPS_MPO_TM{T}
+TM_convert(TM::MPS_TM{T}) where {T} = reshape(TM, (size(TM,1),1,size(TM,2), size(TM,3),1,size(TM,4)))::MPS_MPO_TM{T}
 
-function TM_convert{T}(TM::MPS_MPO_TM{T})::MPS_TM{T}
+function TM_convert(TM::MPS_MPO_TM{T})::MPS_TM{T} where {T}
     size(TM,2) == size(TM,5) == 1 || error("MPO bond dimensions not equal to 1!")
     squeeze(TM, (2,5))
 end
@@ -119,12 +120,12 @@ function TM_dense(A::MPSTensor, B::MPSTensor)::MPS_MPO_TM
     TM_convert(TM)
 end
 
-function TM_dense_op_nn{T}(A1::MPSTensor, A2::MPSTensor, B1::MPSTensor, B2::MPSTensor, op::Array{T,4})::MPS_MPO_TM
+function TM_dense_op_nn(A1::MPSTensor, A2::MPSTensor, B1::MPSTensor, B2::MPSTensor, op::Array{T,4})::MPS_MPO_TM where {T}
     @tensor TM[lA1,lB1,rA2,rB2] := ((A1[lA1, p1k, iA] * A2[iA, p2k, rA2]) * op[p1b, p2b, p1k, p2k]) * (conj(B1[lB1, p1b, iB]) * conj(B2[iB, p2b, rB2])) #NOTE: Allocates intermediate arrays
     TM_convert(TM)
 end
 
-function applyTM_op_nn_l{T}(A1::MPSTensor, A2::MPSTensor, B1::MPSTensor, B2::MPSTensor, op::Array{T,4}, TM2::MPS_MPO_TM{T})
+function applyTM_op_nn_l(A1::MPSTensor, A2::MPSTensor, B1::MPSTensor, B2::MPSTensor, op::Array{T,4}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     @tensor TM21[k1,b1,k4,b4] := ((((TM2[k1,b1,k2,b2] * A1[k2,s1,k3]) * op[t1,t2,s1,s2]) * conj(B1[b2,t1,b3])) * A2[k3,s2,k4]) * conj(B2[b3,t2,b4])
     TM_convert(TM21)
@@ -133,42 +134,42 @@ end
 #This is a workaround for StridedArray not including reshaped arrays formed from a FastContiguousSubArray in in Julia <= 0.6.
 #Since TensorOperations uses the StridedArray type, it misses these cases. Here, we use pointer manipulation to generate
 #views of sections of a vector with an arbitrary "size".
-function unsafe_reshaped_subvec{T}(w::Vector{T}, ind1::Int, sz::NTuple)
+function unsafe_reshaped_subvec(w::Vector{T}, ind1::Int, sz::NTuple) where {T}
     len = prod(sz)
     @assert length(w) >= ind1+len-1 "Vector is not big enough to hold subarray by $(ind1+len-1 - length(w)) elements!"
     unsafe_wrap(Array, pointer(w, ind1), sz)
 end
 
-function res_applyTM_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function res_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     zeros(T, (size(TM2,1), 1, size(TM2,2), bond_dim(A1, 2), 1, bond_dim(B1, 2)))
 end
 
-function res_applyTM_l!{T}(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function res_applyTM_l!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     sz = (size(TM2,1), 1, size(TM2,2), bond_dim(A1, 2), 1, bond_dim(B1, 2))
     size(res) == sz ? res : zeros(T, sz)
 end
 
-workvec_applyTM_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}) = Vector{T}(bond_dim(A1)^2 * bond_dim(B1)^2 * phys_dim(A1) * 2)
+workvec_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}) where {T} = Vector{T}(bond_dim(A1)^2 * bond_dim(B1)^2 * phys_dim(A1) * 2)
 
-function worklen_applyTM_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function worklen_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     len1 = size(TM2,1) * size(TM2,2) * size(TM2,3) * size(B1,2) * size(B1,3)
     len2 = prod(size(TM2)[1:2]) * size(B1)[3] * size(A1,3)
     max(2len1, len1 + len2)
 end
 
-function workvec_applyTM_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function workvec_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     Vector{T}(worklen_applyTM_l(A1, B1, TM2))
 end
 
-function workvec_applyTM_l!{T}(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function workvec_applyTM_l!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     len = worklen_applyTM_l(A1, B1, TM2)
     work = length(work) < len ? resize!(work, len) : work
 end
 
-function applyTM_l!{T}(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T})
+function applyTM_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T}) where {T}
     TM2 = TM_convert(TM2)
     TM21 = TM_convert(TM21)
 
@@ -194,7 +195,7 @@ function applyTM_l!{T}(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, 
     TM_convert(TM21)
 end
 
-function applyTM_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     gc_enable(false)
     @tensor TM21[lA,lB, rA,rB] := (TM2[lA,lB, mA,mB] * conj(B1[mB,s,rB])) * A1[mA,s,rA] #NOTE: Intermediates, final permutation.
@@ -217,7 +218,7 @@ function applyTM_r(A::MPSTensor, B::MPSTensor, x::Matrix)
 end
 applyTM_r(A::MPSTensor, B::MPSTensor, x::Vector) = applyTM_r(A, B, reshape(x, (bond_dim(A), bond_dim(B))))
 
-function applyTM_r{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     gc_enable(false)
     @tensor TM12[lA,lB, rA,rB] := conj(B1[lB,s,mB]) * (A1[lA,s,mA] * TM2[mA,mB, rA,rB]) #NOTE: Intermediates, final permutation.
@@ -226,7 +227,7 @@ function applyTM_r{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
     TM_convert(TM12)
 end
 
-function applyTM_r!{T}(TM12::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T})
+function applyTM_r!(TM12::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T}) where {T}
     TM2 = TM_convert(TM2)
     TM12 = TM_convert(TM12)
 
@@ -253,37 +254,37 @@ function applyTM_r!{T}(TM12::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, 
     TM_convert(TM21)
 end
 
-function res_applyTM_r{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function res_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     zeros(T, (bond_dim(A1, 1), 1, bond_dim(B1, 1), size(TM2,3), 1, size(TM2,4)))
 end
 
-function res_applyTM_r!{T}(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function res_applyTM_r!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     sz = (bond_dim(A1, 1), 1, bond_dim(B1, 1), size(TM2,3), 1, size(TM2,4))
     size(res) == sz ? res : zeros(T, sz)
 end
 
-workvec_applyTM_r{T}(A1::MPSTensor{T}, B1::MPSTensor{T}) = Vector{T}(bond_dim(A1)^2 * bond_dim(B1)^2 * phys_dim(A1) * 2)
+workvec_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}) where {T} = Vector{T}(bond_dim(A1)^2 * bond_dim(B1)^2 * phys_dim(A1) * 2)
 
-function worklen_applyTM_r{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function worklen_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     len1 = prod((size(A1)[1:2]..., size(TM2)[2:4]...))
     len2 = prod((size(A1,1) * size(B1,1), size(TM2)[3:4]))
     max(2len1, len1 + len2)
 end
 
-function workvec_applyTM_r{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function workvec_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     Vector{T}(worklen_applyTM_r(A1, B1, TM2))
 end
 
-function workvec_applyTM_r!{T}(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T})
+function workvec_applyTM_r!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     len = worklen_applyTM_r(A1, B1, TM2)
     work = length(work) < len ? resize!(work, len) : work
 end
 
-function tm_eigs_sparse{T}(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::Int=1; 
-                    x0::Matrix{T}=ones(T,(bond_dim(A), bond_dim(B))))
+function tm_eigs_sparse(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::Int=1; 
+                    x0::Matrix{T}=ones(T,(bond_dim(A), bond_dim(B)))) where {T}
     @assert dirn in (:L, :R)
     
     D = bond_dim(A)
@@ -306,7 +307,7 @@ function tm_eigs_sparse{T}(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::
     ev, eVm
 end
 
-function tm_eigs_dense{T}(A::MPSTensor{T}, B::MPSTensor{T})
+function tm_eigs_dense(A::MPSTensor{T}, B::MPSTensor{T}) where {T}
     TM = TM_dense(A, B)
     
     DA = bond_dim(A)
@@ -322,7 +323,7 @@ function tm_eigs_dense{T}(A::MPSTensor{T}, B::MPSTensor{T})
     ev, eVml, eVmr
 end
 
-function tm_eigs{T}(A::MPSTensor{T}, B::MPSTensor{T}, min_nev::Int; D_dense_max::Int=8)
+function tm_eigs(A::MPSTensor{T}, B::MPSTensor{T}, min_nev::Int; D_dense_max::Int=8) where {T}
     if bond_dim(A) * bond_dim(B) > D_dense_max^2
         evl, eVl = tm_eigs_sparse(A, B, :L, min_nev)
         evr, eVr = tm_eigs_sparse(A, B, :R, min_nev)
@@ -335,7 +336,7 @@ function tm_eigs{T}(A::MPSTensor{T}, B::MPSTensor{T}, min_nev::Int; D_dense_max:
     evl, evr, eVl, eVr
 end
 
-function tm_dominant_eigs{T}(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=8)
+function tm_dominant_eigs(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=8) where {T}
     evl, evr, eVl, eVr = tm_eigs(A, B, 1, D_dense_max=D_dense_max)
     
     indmaxl = findmax(abs(x) for x in evl)[2]
@@ -400,7 +401,7 @@ function gauge_transform(A::MPSTensor, g::Matrix, gi::Matrix)
     Anew
 end
 
-function canonicalize_left{T}(l::Matrix{T}, r::Matrix{T})
+function canonicalize_left(l::Matrix{T}, r::Matrix{T}) where {T}
     tol = sqrt(eps(real(T)))
     
     evl, Ul = eig(Hermitian(l))
@@ -437,11 +438,11 @@ function mul_MPO(A::MPOTensor, B::MPOTensor)
     reshape(AB, (M1l*M2l, d1t, M1r*M2r, d2b))
 end
 
-function mul_MPO{N,T}(M1::NTuple{N,MPOTensor{T}}, M2::NTuple{N,MPOTensor{T}})
+function mul_MPO(M1::NTuple{N,MPOTensor{T}}, M2::NTuple{N,MPOTensor{T}}) where {N,T}
     ntuple(j -> mul_MPO(M1[j], M2[j]), N)
 end
 
-function mul_MPO{T}(M1::Vector{MPOTensor{T}}, M2::Vector{MPOTensor{T}})
+function mul_MPO(M1::Vector{MPOTensor{T}}, M2::Vector{MPOTensor{T}}) where {T}
     MPOTensor{T}[mul_MPO(M1[j], M2[j]) for j in 1:length(M1)]
 end
 
@@ -470,7 +471,7 @@ function applyTM_MPO_r(A::MPSTensor, B::MPSTensor, o::MPOTensor, TM2::MPS_MPO_TM
     TM12
 end
 
-function worklen_applyTM_MPO_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})
+function worklen_applyTM_MPO_l(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     len = 0
     
     wsz1 = (size(TM2)[1:5]..., size(B1)[2:3]...)
@@ -512,26 +513,26 @@ function worklen_applyTM_MPO_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTens
     len
 end
 
-function workvec_applyTM_MPO_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})
+function workvec_applyTM_MPO_l(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     Vector{T}(worklen_applyTM_MPO_l(A1, B1, o, TM2))
 end
 
-function workvec_applyTM_MPO_l!{T}(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})
+function workvec_applyTM_MPO_l!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     len = worklen_applyTM_MPO_l(A1, B1, o, TM2)
     work = length(work) < len ? resize!(work, len) : work
 end
 
-function res_applyTM_MPO_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T}
+function res_applyTM_MPO_l(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
     Array{T,6}((size(TM2)[1:3]..., bond_dim(A1,2),size(o,3),bond_dim(B1,2)))
 end
 
-function res_applyTM_MPO_l!{T}(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T}
+function res_applyTM_MPO_l!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
     sz = (size(TM2)[1:3]..., bond_dim(A1,2), size(o,3), bond_dim(B1,2))
     size(res) == sz ? res : zeros(T, sz)
 end
 
 #NOTE: This works, but is pretty horrible. We are doing manual memory management because the garbage collector is super slow!
-function applyTM_MPO_l!{T}(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T}
+function applyTM_MPO_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T} where {T}
     wsz1 = (size(TM2)[1:5]..., size(B1)[2:3]...)
     wlen1 = prod(wsz1)
     wsz2 = (wsz1[1:4]..., wsz1[7], wsz1[5:6]...)
@@ -582,11 +583,13 @@ function applyTM_MPO_l!{T}(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{
 end
 
 #Convenience functions that fall back on MPO-less versions in case o is the Identity.
-workvec_applyTM_MPO_l{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}) = workvec_applyTM_l(A1, B1, TM2)
-workvec_applyTM_MPO_l!{T}(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}) = workvec_applyTM_l!(work, A1, B1, TM2)
-applyTM_MPO_l!{T}(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T} = applyTM_l!(TM21, A1, B1, TM2, work)
+workvec_applyTM_MPO_l(A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T})  where {T} = workvec_applyTM_l(A1, B1, TM2)
+workvec_applyTM_MPO_l!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}) where {T} = workvec_applyTM_l!(work, A1, B1, TM2)
+function applyTM_MPO_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T} where {T}
+    applyTM_l!(TM21, A1, B1, TM2, work)
+end
 
-function workvec_alloc_applyTM_MPO_r{T}(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})
+function workvec_alloc_applyTM_MPO_r(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     ATM2_sz = (size(A)[1:2]..., size(TM2)[2:end]...)
     ATM2_len = prod(ATM2_sz)
     
@@ -623,7 +626,7 @@ function workvec_alloc_applyTM_MPO_r{T}(A::MPSTensor{T}, B::MPSTensor{T}, o::MPO
     (ATM2_sz, ATM2p_sz, op_sz, oATM2_sz, oATM2p_sz, TM21p_sz), (ATM2_ind, ATM2p_ind, op_ind, oATM2_ind, oATM2p_ind, TM21p_ind)
 end
 
-function workvec_applyTM_MPO_r!{T}(work::Vector{T}, A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})
+function workvec_applyTM_MPO_r!(work::Vector{T}, A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     szs, inds = workvec_alloc_applyTM_MPO_r(A, B, o, TM2)
     
     len = maximum(inds[j] + prod(szs[j]) for j in 1:6)
@@ -631,19 +634,19 @@ function workvec_applyTM_MPO_r!{T}(work::Vector{T}, A::MPSTensor{T}, B::MPSTenso
     work = length(work) < len ? resize!(work, len) : work
 end
 
-workvec_applyTM_MPO_r{T}(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) = 
+workvec_applyTM_MPO_r(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) where {T} = 
     workvec_applyTM_MPO_r!(Vector{T}(), A, B, o, TM2)
 
-function res_applyTM_MPO_r{T}(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T}
+function res_applyTM_MPO_r(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
     Array{T,6}((bond_dim(A,1),size(o,1),bond_dim(B,1),size(TM2)[4:6]...))
 end
 
-function res_applyTM_MPO_r!{T}(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T}
+function res_applyTM_MPO_r!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
     sz = ((bond_dim(A,1),size(o,1),bond_dim(B,1),size(TM2)[4:6]...))
     size(res) == sz ? res : zeros(T, sz)
 end
 
-function applyTM_MPO_r!{T}(TM21::MPS_MPO_TM{T}, A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T}
+function applyTM_MPO_r!(TM21::MPS_MPO_TM{T}, A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T} where {T}
     szs, inds = workvec_alloc_applyTM_MPO_r(A, B, o, TM2)
     ATM2_sz, ATM2p_sz, op_sz, oATM2_sz, oATM2p_sz, TM21p_sz = szs
     ATM2_ind, ATM2p_ind, op_ind, oATM2_ind, oATM2p_ind, TM21p_ind = inds
@@ -669,8 +672,10 @@ function applyTM_MPO_r!{T}(TM21::MPS_MPO_TM{T}, A::MPSTensor{T}, B::MPSTensor{T}
     @tensor TM21[k1,m1,b1, k3,m3,b3] = TM21p[b1, m1, k1, k3,m3,b3]
 end
 
-workvec_applyTM_MPO_r{T}(A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}) = workvec_applyTM_r(A1, B1, TM2)
-workvec_applyTM_MPO_r!{T}(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}) = workvec_applyTM_r!(work, A1, B1, TM2)
-applyTM_MPO_r!{T}(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T} = applyTM_r!(TM21, A1, B1, TM2, work)
+workvec_applyTM_MPO_r(A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}) where {T} = workvec_applyTM_r(A1, B1, TM2)
+workvec_applyTM_MPO_r!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}) where {T} = workvec_applyTM_r!(work, A1, B1, TM2)
+function applyTM_MPO_r!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::IdentityMPOTensor, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T} where {T}
+    applyTM_r!(TM21, A1, B1, TM2, work)
+end
 
 end
