@@ -368,7 +368,7 @@ function tm_dominant_eigs(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=8) 
     sfac = 1.0/sqrt(abs_n)
     
     #We can always find Hermitian l and r. Fix the phase on r using its trace, which must be nonzero.
-    r_tr = trace(r)
+    r_tr = tr(r)
     phase_r = abs(r_tr)/r_tr
     
     #Fix the phase on l using the phase of n
