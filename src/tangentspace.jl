@@ -41,20 +41,20 @@ function LinearAlgebra.norm(Tvec::puMPSTvec{T}) where {T}
         TBs = applyTM_l!(TBs, A, A, TBs, work)
 
         TAB = applyTM_l!(TMres, B, A, TA, work)
-        BLAS.axpy!(cis(p*n), TAB, TBs) #Add to complete terms (containing both B's)
+        axpy!(cis(p*n), TAB, TBs) #Add to complete terms (containing both B's)
 
         TA = applyTM_l!(TA, A, A, TA, work)
     end
 
-    sqrt(N*trace(TBs))
+    sqrt(N*tr(TBs))
 end
 
 """
-    Base.normalize!{T}(Tvec::puMPSTvec{T}) = scale!(Tvec.B, 1.0/norm(Tvec))
+    Base.normalize!{T}(Tvec::puMPSTvec{T}) = rmul!(Tvec.B, 1.0/norm(Tvec))
 
 Normalizes a puMPState tangent vector `Tvec` in place.
 """
-LinearAlgebra.normalize!(Tvec::puMPSTvec{T}) where {T} = scale!(Tvec.B, 1.0/norm(Tvec))
+LinearAlgebra.normalize!(Tvec::puMPSTvec{T}) where {T} = rmul!(Tvec.B, 1.0/norm(Tvec))
 
 """
     expect{T}(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T})
@@ -79,12 +79,12 @@ function expect(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T}) where {T}
         TBs = applyTM_MPO_l!(TBs, A, A, OM, TBs, work)
 
         TAB = applyTM_MPO_l!(TMres, B, A, OM, TA, work)
-        BLAS.axpy!(cis(p*(n-1)), TAB, TBs) #Add to complete terms (containing both B's)
+        axpy!(cis(p*(n-1)), TAB, TBs) #Add to complete terms (containing both B's)
 
         n < N && (TA = applyTM_MPO_l!(TA, A, A, OM, TA, work))
     end
 
-    N*trace(TBs)
+    N*tr(TBs)
 end
 
 #Slower version of the above
@@ -146,16 +146,16 @@ function overlap(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
     TAA = length(TAA_all) > 0 ? TAA_all[1] : (length(O) > 0 ? TM_dense_MPO(A1, A2, O[1]) : TM_dense(A1, A2))
 
     TBBs = length(O) > 0 ? TM_dense_MPO(B1, B2, O[1]) : TM_dense(B1, B2)
-    scale!(TBBs, cis(p1-p2))
+    rmul!(TBBs, cis(p1-p2))
 
     TABs = length(O) > 0 ? TM_dense_MPO(A1, B2, O[1]) : TM_dense(A1, B2)
-    scale!(TABs, cis(-p2))
+    rmul!(TABs, cis(-p2))
 
     if length(TBAs_all) > 0
         TBAs = TBAs_all[1]
     else
         TBAs = length(O) > 0 ? TM_dense_MPO(B1, A2, O[1]) : TM_dense(B1, A2)
-        scale!(TBAs, cis(p1))
+        rmul!(TBAs, cis(p1))
     end
 
     work = Vector{T}()
@@ -165,19 +165,19 @@ function overlap(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
 
         TBBs = applyTM_MPO_l!(similar(TMres), A1, A2, O[n], TBBs, work)
 
-        BLAS.axpy!(cis(n*(p1-p2)), applyTM_MPO_l!(TMres, B1, B2, O[n], TAA, work), TBBs)
-        BLAS.axpy!(cis(n*(-p2)), applyTM_MPO_l!(TMres, A1, B2, O[n], TBAs, work), TBBs)
-        BLAS.axpy!(cis(n*(p1)), applyTM_MPO_l!(TMres, B1, A2, O[n], TABs, work), TBBs)
+        axpy!(cis(n*(p1-p2)), applyTM_MPO_l!(TMres, B1, B2, O[n], TAA, work), TBBs)
+        axpy!(cis(n*(-p2)), applyTM_MPO_l!(TMres, A1, B2, O[n], TBAs, work), TBBs)
+        axpy!(cis(n*(p1)), applyTM_MPO_l!(TMres, B1, A2, O[n], TABs, work), TBBs)
 
         if n < N
             TABs = applyTM_MPO_l!(similar(TMres), A1, A2, O[n], TABs, work)
-            BLAS.axpy!(cis(n*(-p2)), applyTM_MPO_l!(TMres, A1, B2, O[n], TAA, work), TABs)
+            axpy!(cis(n*(-p2)), applyTM_MPO_l!(TMres, A1, B2, O[n], TAA, work), TABs)
 
             if length(TBAs_all) > 0
                 TBAs = TBAs_all[n]
             else
                 TBAs = applyTM_MPO_l!(similar(TMres), A1, A2, O[n], TBAs, work)
-                BLAS.axpy!(cis(n*(p1)), applyTM_MPO_l!(TMres, B1, A2, O[n], TAA, work), TBAs)
+                axpy!(cis(n*(p1)), applyTM_MPO_l!(TMres, B1, A2, O[n], TAA, work), TBAs)
             end
 
             TAA = length(TAA_all) > 0 ? TAA_all[n] : applyTM_MPO_l!(similar(TMres), A1, A2, O[n], TAA, work)
@@ -191,19 +191,19 @@ function overlap(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
 
             TBBs = applyTM_l!(TBBs, A1, A2, TBBs, work)
 
-            BLAS.axpy!(cis(n*(p1-p2)), applyTM_l!(TMres, B1, B2, TAA, work), TBBs)
-            BLAS.axpy!(cis(n*(-p2)), applyTM_l!(TMres, A1, B2, TBAs, work), TBBs)
-            BLAS.axpy!(cis(n*(p1)), applyTM_l!(TMres, B1, A2, TABs, work), TBBs)
+            axpy!(cis(n*(p1-p2)), applyTM_l!(TMres, B1, B2, TAA, work), TBBs)
+            axpy!(cis(n*(-p2)), applyTM_l!(TMres, A1, B2, TBAs, work), TBBs)
+            axpy!(cis(n*(p1)), applyTM_l!(TMres, B1, A2, TABs, work), TBBs)
 
             if n < N
                 TABs = applyTM_l!(TABs, A1, A2, TABs, work)
-                BLAS.axpy!(cis(n*(-p2)), applyTM_l!(TMres, A1, B2, TAA, work), TABs)
+                axpy!(cis(n*(-p2)), applyTM_l!(TMres, A1, B2, TAA, work), TABs)
 
                 if length(TBAs_all) > 0
                     TBAs = TBAs_all[n]
                 else
                     TBAs = applyTM_l!(TBAs, A1, A2, TBAs, work)
-                    BLAS.axpy!(cis(n*(p1)), applyTM_l!(TMres, B1, A2, TAA, work), TBAs)
+                    axpy!(cis(n*(p1)), applyTM_l!(TMres, B1, A2, TAA, work), TBAs)
                 end
 
                 TAA = length(TAA_all) > 0 ? TAA_all[n] : applyTM_l!(TAA, A1, A2, TAA, work)
@@ -211,7 +211,7 @@ function overlap(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
         end
     end
 
-    trace(TBBs)
+    tr(TBBs)
 end
 
 function fidelity(Tvec2::puMPSTvec{T}, Tvec1::puMPSTvec{T}) where {T}
@@ -237,7 +237,7 @@ function overlap_precomp_samestate(O::MPO_open{T}, Tvec1::puMPSTvec{T}) where {T
     TAA = TM_dense_MPO(A1, A1, O[1])
     push!(TAA_all, TAA)
     TBAs = TM_dense_MPO(B1, A1, O[1])
-    scale!(TBAs, cis(p1))
+    rmul!(TBAs, cis(p1))
     push!(TBAs_all, TBAs)
 
     work = Vector{T}()
@@ -246,7 +246,7 @@ function overlap_precomp_samestate(O::MPO_open{T}, Tvec1::puMPSTvec{T}) where {T
         TMres = res_applyTM_MPO_l(A1, A1, O[n], TAA)
 
         TBAs = applyTM_MPO_l!(similar(TMres), A1, A1, O[n], TBAs, work)
-        BLAS.axpy!(cis(n*(p1)), applyTM_MPO_l!(TMres, B1, A1, O[n], TAA, work), TBAs)
+        axpy!(cis(n*(p1)), applyTM_MPO_l!(TMres, B1, A1, O[n], TAA, work), TBAs)
         push!(TBAs_all, TBAs)
 
         TAA = applyTM_MPO_l!(similar(TMres), A1, A1, O[n], TAA, work)
@@ -259,7 +259,7 @@ function overlap_precomp_samestate(O::MPO_open{T}, Tvec1::puMPSTvec{T}) where {T
             work = workvec_applyTM_l!(work, A1, A1, TAA)
 
             TBAs = applyTM_l!(TBAs, A1, A1, TBAs, work)
-            BLAS.axpy!(cis(n*(p1)), applyTM_l!(TMres, B1, A1, TAA, work), TBAs)
+            axpy!(cis(n*(p1)), applyTM_l!(TMres, B1, A1, TAA, work), TBAs)
             push!(TBAs_all, TBAs)
 
             TAA = applyTM_l!(TAA, A1, A1, TAA, work)
@@ -321,7 +321,7 @@ function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vecto
         GC.enable(true)
         GC.gc(false)
         for j in 1:length(ks)
-            BLAS.axpy!(N, Gpart, Gs[j])
+            axpy!(N, Gpart, Gs[j])
         end
     end
 
@@ -344,7 +344,7 @@ function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vecto
         GC.gc(false)
 
         for k in 1:length(ps)
-            BLAS.axpy!(N*cis(ps[k]*L), Gpart, Gs[k])
+            axpy!(N*cis(ps[k]*L), Gpart, Gs[k])
         end
 
         GC.enable(false)
@@ -359,7 +359,7 @@ function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vecto
         GC.gc(false)
 
         for k in 1:length(ps)
-            BLAS.axpy!(N*cis(ps[k]*(N-L)), Gpart, Gs[k])
+            axpy!(N*cis(ps[k]*(N-L)), Gpart, Gs[k])
         end
 
         if j < L
@@ -389,7 +389,7 @@ function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vecto
         GC.enable(true)
         GC.gc(false)
         for j in 1:length(ps)
-            BLAS.axpy!(N*cis(ps[j]*i), Gpart, Gs[j])
+            axpy!(N*cis(ps[j]*i), Gpart, Gs[j])
         end
     end
 
@@ -440,7 +440,7 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
     GC.enable(true)
     GC.gc(false)
     for j in 1:length(ks)
-        BLAS.axpy!(N, part, op_effs[j])
+        axpy!(N, part, op_effs[j])
     end
 
     #Nearest-neighbour term with conjugate gap on the left, gap on the right. Conjugate gap is site 1.
@@ -452,7 +452,7 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
     GC.enable(true)
     GC.gc(false)
     for j in 1:length(ks)
-        BLAS.axpy!(N*cis(ps[j]), part, op_effs[j])
+        axpy!(N*cis(ps[j]), part, op_effs[j])
     end
 
     #Terms separated by one or more sites
@@ -465,7 +465,7 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
         GC.enable(true)
         GC.gc(false)
         for j in 1:length(ks)
-            BLAS.axpy!(N*cis(ps[j]*(n-1)), part, op_effs[j])
+            axpy!(N*cis(ps[j]*(n-1)), part, op_effs[j])
         end
 
         #Reshape blk_l into an MPO transfer matrix
@@ -489,7 +489,7 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
     GC.enable(true)
     GC.gc(false)
     for j in 1:length(ks)
-        BLAS.axpy!(N*cis(ps[j]*(N-1)), part, op_effs[j])
+        axpy!(N*cis(ps[j]*(N-1)), part, op_effs[j])
     end
 
     op_effs
@@ -569,7 +569,7 @@ function op_term_MPO_boundary(M::puMPState{T}, op_b::MPO_open{T}, n::Int) where 
     elseif n >= N-NopR+1
         return op_b_R[n-(N-NopR)]
     else
-        return MPOTensor{T}((0,0,0,0)) #length zero MPO tensor
+        return MPOTensor{T}(undef, (0,0,0,0)) #length zero MPO tensor
     end
 end
 
@@ -603,7 +603,7 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
     GC.enable(true)
     GC.gc(false)
     for j in 1:length(ks)
-        BLAS.axpy!(N, part, op_effs[j])
+        axpy!(N, part, op_effs[j])
     end
 
     #NN-term 1, with conjugate gap (site 1) then gap
@@ -620,7 +620,7 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
     GC.enable(true)
     GC.gc(false)
     for j in 1:length(ks)
-        BLAS.axpy!(N*cis(ps[j]), part, op_effs[j])
+        axpy!(N*cis(ps[j]), part, op_effs[j])
     end
 
     #gap at site n
@@ -648,7 +648,7 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
         GC.enable(true)
         GC.gc(false)
         for j in 1:length(ks)
-            BLAS.axpy!(N*cis(ps[j]*(n-1)), part, op_effs[j])
+            axpy!(N*cis(ps[j]*(n-1)), part, op_effs[j])
         end
     end
 
@@ -666,7 +666,7 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
     GC.enable(true)
     GC.gc(false)
     for j in 1:length(ks)
-        BLAS.axpy!(N*cis(ps[j]*(N-1)), part, op_effs[j])
+        axpy!(N*cis(ps[j]*(N-1)), part, op_effs[j])
     end
 
     op_effs
@@ -814,7 +814,7 @@ The function returns a list of energies, a list of momenta (entries of `ks`), an
 """
 function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Int}; pinv_tol::Real=1e-10) where {T}
     M, lambda, lambda_i = canonicalize_left!(M)
-    lambda_i = full(lambda_i)
+    lambda_i = Matrix(lambda_i)
 
     @time Gs, Heffs = tangent_space_metric_and_MPO(M, H, ks, lambda_i)
     tspace_ops_to_center_gauge!(Gs, lambda_i)
@@ -851,7 +851,7 @@ function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Arra
         @time for i in 1:size(eV,2)
             v = view(eV, :,i)
             Bnrm = sqrt(dot(v, G * v)) #We can use G to compute the norm
-            scale!(v, 1.0/Bnrm)
+            rmul!(v, 1.0/Bnrm)
             Bc_mat = reshape(v, (D*d, D))
             Bl = Bc_mat * lambda_i #We assume G and Heff were in the center gauge.
             Bl = reshape(Bl, Bshp)

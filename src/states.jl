@@ -760,7 +760,7 @@ function gradient_central(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::M
         #Split the inverse problem along the physical dimension, since N acts trivially on that factor. Avoids constructing N x I.
         for s in 1:d
             grad_vec = BiCGstab(Nc, vec(view(d_Ac, :,:,s)), vec(view(grad_Ac_init, :,:,s)), tol, max_itr=max_itr)
-            copy!(view(grad_Ac, :,:,s), grad_vec)
+            copyto!(view(grad_Ac, :,:,s), grad_vec)
         end
     else
         #Dense version
@@ -768,7 +768,7 @@ function gradient_central(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::M
         Nc_i = pinv(Nc, pinv_tol)
         for s in 1:d
             grad_vec = Nc_i * vec(view(d_Ac, :,:,s))
-            copy!(view(grad_Ac, :,:,s), grad_vec)
+            copyto!(view(grad_Ac, :,:,s), grad_vec)
         end
     end
     

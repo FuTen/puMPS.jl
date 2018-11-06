@@ -166,12 +166,12 @@ end
 
 function res_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
-    zeros(T, (size(TM2,1), 1, size(TM2,2), bond_dim(A1, 2), 1, bond_dim(B1, 2)))
+    zeros(T, (size(TM2,1), 1, size(TM2,2), bond_dim_R(A1), 1, bond_dim_R(B1)))
 end
 
 function res_applyTM_l!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
-    sz = (size(TM2,1), 1, size(TM2,2), bond_dim(A1, 2), 1, bond_dim(B1, 2))
+    sz = (size(TM2,1), 1, size(TM2,2), bond_dim_R(A1), 1, bond_dim_R(B1))
     size(res) == sz ? res : zeros(T, sz)
 end
 
@@ -280,12 +280,12 @@ end
 
 function res_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
-    zeros(T, (bond_dim(A1, 1), 1, bond_dim(B1, 1), size(TM2,3), 1, size(TM2,4)))
+    zeros(T, (bond_dim_L(A1), 1, bond_dim_L(B1), size(TM2,3), 1, size(TM2,4)))
 end
 
 function res_applyTM_r!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
-    sz = (bond_dim(A1, 1), 1, bond_dim(B1, 1), size(TM2,3), 1, size(TM2,4))
+    sz = (bond_dim_L(A1), 1, bond_dim_L(B1), size(TM2,3), 1, size(TM2,4))
     size(res) == sz ? res : zeros(T, sz)
 end
 
@@ -547,11 +547,11 @@ function workvec_applyTM_MPO_l!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor
 end
 
 function res_applyTM_MPO_l(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
-    Array{T,6}(undef, (size(TM2)[1:3]..., bond_dim(A1,2),size(o,3),bond_dim(B1,2)))
+    Array{T,6}(undef, (size(TM2)[1:3]..., bond_dim_R(A1),size(o,3),bond_dim_R(B1)))
 end
 
 function res_applyTM_MPO_l!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
-    sz = (size(TM2)[1:3]..., bond_dim(A1,2), size(o,3), bond_dim(B1,2))
+    sz = (size(TM2)[1:3]..., bond_dim_R(A1), size(o,3), bond_dim_R(B1))
     size(res) == sz ? res : zeros(T, sz)
 end
 
@@ -662,11 +662,11 @@ workvec_applyTM_MPO_r(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MP
     workvec_applyTM_MPO_r!(Vector{T}(), A, B, o, TM2)
 
 function res_applyTM_MPO_r(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
-    Array{T,6}(undef, (bond_dim(A,1),size(o,1),bond_dim(B,1),size(TM2)[4:6]...))
+    Array{T,6}(undef, (bond_dim_L(A),size(o,1),bond_dim_L(B),size(TM2)[4:6]...))
 end
 
 function res_applyTM_MPO_r!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
-    sz = ((bond_dim(A,1),size(o,1),bond_dim(B,1),size(TM2)[4:6]...))
+    sz = ((bond_dim_L(A),size(o,1),bond_dim_L(B),size(TM2)[4:6]...))
     size(res) == sz ? res : zeros(T, sz)
 end
 
