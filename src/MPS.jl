@@ -6,14 +6,16 @@ using TensorOperations
 using LinearMaps
 using Arpack
 
-export MPSTensor, bond_dim, phys_dim, mps_tensor, mps_tensor_shape, rand_MPSTensor_unitary, rand_MPSTensor,
-       MPS_TM, TM_dense, TM_dense_op_nn, 
+export MPSTensor, bond_dim, bond_dim_L, bond_dim_R, phys_dim, mps_tensor, mps_tensor_shape, 
+       rand_MPSTensor_unitary, rand_MPSTensor,
+       MPS_TM, TM_dense, eyeTM, TM_dense_op_nn, 
        applyTM_op_nn_l, applyTM_l, applyTM_r,
        workvec_applyTM_l, workvec_applyTM_l!, res_applyTM_l, res_applyTM_l!, applyTM_l!, 
        workvec_applyTM_r, workvec_applyTM_r!, res_applyTM_r, res_applyTM_r!, applyTM_r!, 
-       tm_eigs_sparse, tm_eigs_dense, tm_dominant_eigs,
+       tm_eigs_sparse, tm_eigs_dense, tm_eigs, tm_dominant_eigs,
         gauge_transform, canonicalize_left,
-       MPOTensor, IdentityMPOTensor, mul_MPO, MPO_open, MPS_MPO_TM, TM_dense_MPO, applyTM_MPO_l, applyTM_MPO_r,
+       MPOTensor, IdentityMPOTensor, mpo_tensor_shape, rand_MPOTensor,
+       mul_MPO, MPO_open, MPS_MPO_TM, TM_dense_MPO, applyTM_MPO_l, applyTM_MPO_r,
        worklen_applyTM_MPO_l, workvec_applyTM_MPO_l, workvec_applyTM_MPO_l!, 
        res_applyTM_MPO_l, res_applyTM_MPO_l!, applyTM_MPO_l!,
        workvec_applyTM_MPO_r, workvec_applyTM_MPO_r!, applyTM_MPO_r!, res_applyTM_MPO_r, res_applyTM_MPO_r!,
@@ -31,7 +33,9 @@ In pictures, for an `MPSTensor` `A`:
 """
 MPSTensor{T} = Array{T,3}
 
-bond_dim(A::MPSTensor, which::Int=1) = which == 1 ? size(A,1) : size(A,3)
+bond_dim_L(A::MPSTensor) = size(A,1)
+bond_dim_R(A::MPSTensor) = size(A,3)
+bond_dim(A::MPSTensor) = bond_dim_L(A)
 phys_dim(A::MPSTensor) = size(A,2)
 mps_tensor_shape(d::Int, D::Int) = (D,d,D)
 mps_tensor_shape(d::Int, D1::Int, D2::Int) = (D1,d,D2)
@@ -50,6 +54,9 @@ MPOTensor{T} = Array{T,4}
 struct IdentityMPOTensor
 end
 
+mpo_tensor_shape(d::Int, M::Int) = (M,d,M,d)
+mpo_tensor_shape(d::Int, M1::Int, M2::Int) = (M1,d,M2,d)
+
 function randunitary(::Type{T}, N::Int)::Matrix{T} where {T}
     if T <: Complex
         rT = real(T)
@@ -64,13 +71,14 @@ function randunitary(::Type{T}, N::Int)::Matrix{T} where {T}
 end
 
 #Note: An MPS generated this way already has r proportional to I and largest tm eigenvalue = 1
-function rand_MPSTensor_unitary(::Type{T}, d::Int, D::Int)::MPSTensor{T} where {T}
-    U = randunitary(T, d*D)
-    reshape(U[1:D,:], mps_tensor_shape(d,D))
+function rand_MPSTensor_unitary(::Type{T}, d::Int, D1::Int, D2::Int)::MPSTensor{T} where {T}
+    U = randunitary(T, max(D1,d*D2))
+    reshape(U[1:D1,1:d*D2], mps_tensor_shape(d,D1,D2))
 end
+rand_MPSTensor_unitary(T, d::Int, D::Int) = rand_MPSTensor_unitary(T, d, D, D)
 
-function rand_MPSTensor(::Type{T}, d::Int, D::Int)::MPSTensor{T}  where {T}
-    shp = mps_tensor_shape(d,D)
+function rand_MPSTensor(::Type{T}, d::Int, D1::Int, D2::Int)::MPSTensor{T}  where {T}
+    shp = mps_tensor_shape(d,D1,D2)
     if T <: Complex
         rT = real(T)
         A = complex.(randn(rT, shp), randn(rT, shp)) / √2
@@ -79,6 +87,19 @@ function rand_MPSTensor(::Type{T}, d::Int, D::Int)::MPSTensor{T}  where {T}
     end
     A
 end
+rand_MPSTensor(T, d::Int, D::Int) = rand_MPSTensor(T, d, D, D)
+
+function rand_MPOTensor(::Type{T}, d::Int, M1::Int, M2::Int)::MPOTensor{T}  where {T}
+    shp = mpo_tensor_shape(d,M1,M2)
+    if T <: Complex
+        rT = real(T)
+        O = complex.(randn(rT, shp), randn(rT, shp)) / √2
+    else
+        O = randn(T, shp)
+    end
+    O
+end
+rand_MPOTensor(T, d::Int, M::Int) = rand_MPOTensor(T,d,M,M)
 
 """
 Dense transfer matrix with MPO:
