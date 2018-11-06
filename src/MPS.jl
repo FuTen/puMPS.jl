@@ -174,7 +174,7 @@ end
 
 function applyTM_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T}) where {T}
     TM2 = TM_convert(TM2)
-    TM21 = TM_convert(TM21)
+    TM21c = TM_convert(TM21)
 
     wsz1 = (size(TM2)[1:3]..., size(B1)[2:3]...)
     wlen1 = prod(wsz1)
@@ -193,9 +193,9 @@ function applyTM_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2
     wsz3 = (TM2sz[1:2]..., size(B1)[3], size(A1,3))
     TM21p = unsafe_reshaped_subvec(work, wlen2+1, wsz3)
     @tensor TM21p[lA,lB, rB,rA] = TM2B1p[lA,lB, rB,mA,s] * A1[mA,s,rA]
-    @tensor TM21[lA,lB, rA,rB] = TM21p[lA,lB, rB,rA]
+    @tensor TM21c[lA,lB, rA,rB] = TM21p[lA,lB, rB,rA]
     
-    TM_convert(TM21)
+    TM21
 end
 
 function applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
@@ -232,7 +232,7 @@ end
 
 function applyTM_r!(TM12::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}, work::Vector{T}) where {T}
     TM2 = TM_convert(TM2)
-    TM12 = TM_convert(TM12)
+    TM12c = TM_convert(TM12)
 
     wsz1 = (size(A1)[1:2]..., size(TM2)[2:4]...)
     wlen1 = prod(wsz1)
@@ -243,18 +243,18 @@ function applyTM_r!(TM12::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2
     wlen2 = prod(wsz2)
     A1TM2p = unsafe_reshaped_subvec(work, wlen1+1, wsz2) #take work vector section after TM2B1 storage
     @tensor A1TM2p[s,mB,lA, rA,rB] = A1TM2[lA,s,mB, rA,rB]
-    TM2B1p_copy = unsafe_reshaped_subvec(work, 1, wsz2)
-    copy!(TM2B1p_copy, TM2B1p)
-    TM2B1p = TM2B1p_copy
+    A1TM2p_copy = unsafe_reshaped_subvec(work, 1, wsz2)
+    copyto!(A1TM2p_copy, A1TM2p)
+    A1TM2p = A1TM2p_copy
     
-    TM2sz = size(TM2)
-    wsz3 = (TM2sz[2], TM2sz[1], TM2sz[3:4]...)
-    TM21p = unsafe_reshaped_subvec(work, wlen2+1, wsz3)
-    @tensor TM21p[lB,lA, rA,rB] = conj(B1[lB,s,mB]) * A1TM2p[s,mB,lA, rA,rB]
+    TM12sz = size(TM12c)
+    wsz3 = (TM12sz[2], TM12sz[1], TM12sz[3:4]...)
+    TM12p = unsafe_reshaped_subvec(work, wlen2+1, wsz3)
+    @tensor TM12p[lB,lA, rA,rB] = conj(B1[lB,s,mB]) * A1TM2p[s,mB,lA, rA,rB]
 
-    @tensor TM21[lA,lB, rA,rB] = TM21p[lB,lA, rA,rB]
+    @tensor TM12c[lA,lB, rA,rB] = TM12p[lB,lA, rA,rB]
     
-    TM_convert(TM21)
+    TM12
 end
 
 function res_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
@@ -273,7 +273,7 @@ workvec_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}) where {T} = Vector{T}(bond
 function worklen_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
     len1 = prod((size(A1)[1:2]..., size(TM2)[2:4]...))
-    len2 = prod((size(A1,1) * size(B1,1), size(TM2)[3:4]))
+    len2 = prod((size(A1,1) * size(B1,1), size(TM2)[3:4]...))
     max(2len1, len1 + len2)
 end
 
