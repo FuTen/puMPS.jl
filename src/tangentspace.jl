@@ -886,8 +886,8 @@ function Hn_in_basis(M::puMPState{T}, Hn_split::Tuple{Int, MPO_PBC_split{T}}, Tv
 
     Hn_in_basis = zeros(T, (Ntvs,Ntvs))
     for j in 1:Ntvs
-        ind = findfirst(ks, Tvspins[j])
-        if ind > 0
+        ind = findfirst(k->k==Tvspins[j], ks)
+        if ind !== nothing
             Bj = tvec_tensor(Tvec_basis[j])
             Hn_eff = reshape(Hn_effs[ind], (length(Bj), length(Bj)))
             for k in 1:Ntvs
