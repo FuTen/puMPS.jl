@@ -4,6 +4,7 @@ module MPS
 using LinearAlgebra
 using TensorOperations
 using LinearMaps
+using Arpack
 
 export MPSTensor, bond_dim, phys_dim, mps_tensor, mps_tensor_shape, rand_MPSTensor_unitary, rand_MPSTensor,
        MPS_TM, TM_dense, TM_dense_op_nn, 
@@ -109,16 +110,18 @@ TM_convert(TM::MPS_TM{T}) where {T} = reshape(TM, (size(TM,1),1,size(TM,2), size
 
 function TM_convert(TM::MPS_MPO_TM{T})::MPS_TM{T} where {T}
     size(TM,2) == size(TM,5) == 1 || error("MPO bond dimensions not equal to 1!")
-    squeeze(TM, (2,5))
+    dropdims(TM, dims=(2,5))
 end
 
 function TM_dense(A::MPSTensor, B::MPSTensor)::MPS_MPO_TM
-    gc_enable(false)
+    GC.enable(false)
     @tensor TM[lA,lB,rA,rB] := A[lA, s, rA] * conj(B[lB, s, rB]) #NOTE: This will generally allocate to do permutations!
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     TM_convert(TM)
 end
+
+eyeTM(T::Type, D::Int)::MPS_MPO_TM = (e = Matrix{T}(I,D,D); reshape(kron(e,e), (D,1,D, D,1,D)))
 
 function TM_dense_op_nn(A1::MPSTensor, A2::MPSTensor, B1::MPSTensor, B2::MPSTensor, op::Array{T,4})::MPS_MPO_TM where {T}
     @tensor TM[lA1,lB1,rA2,rB2] := ((A1[lA1, p1k, iA] * A2[iA, p2k, rA2]) * op[p1b, p2b, p1k, p2k]) * (conj(B1[lB1, p1b, iB]) * conj(B2[iB, p2b, rB2])) #NOTE: Allocates intermediate arrays
@@ -151,7 +154,7 @@ function res_applyTM_l!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, 
     size(res) == sz ? res : zeros(T, sz)
 end
 
-workvec_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}) where {T} = Vector{T}(bond_dim(A1)^2 * bond_dim(B1)^2 * phys_dim(A1) * 2)
+workvec_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}) where {T} = Vector{T}(undef, bond_dim(A1)^2 * bond_dim(B1)^2 * phys_dim(A1) * 2)
 
 function worklen_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
@@ -161,7 +164,7 @@ function worklen_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T
 end
 
 function workvec_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
-    Vector{T}(worklen_applyTM_l(A1, B1, TM2))
+    Vector{T}(undef, worklen_applyTM_l(A1, B1, TM2))
 end
 
 function workvec_applyTM_l!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
@@ -183,7 +186,7 @@ function applyTM_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2
     TM2B1p = unsafe_reshaped_subvec(work, wlen1+1, wsz2) #take work vector section after TM2B1 storage
     @tensor TM2B1p[lA,lB, rB,mA,s] = TM2B1[lA,lB, mA,s,rB]
     TM2B1p_copy = unsafe_reshaped_subvec(work, 1, wsz2)
-    copy!(TM2B1p_copy, TM2B1p)
+    copyto!(TM2B1p_copy, TM2B1p)
     TM2B1p = TM2B1p_copy
     
     TM2sz = size(TM2)
@@ -197,18 +200,18 @@ end
 
 function applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
-    gc_enable(false)
+    GC.enable(false)
     @tensor TM21[lA,lB, rA,rB] := (TM2[lA,lB, mA,mB] * conj(B1[mB,s,rB])) * A1[mA,s,rA] #NOTE: Intermediates, final permutation.
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     TM_convert(TM21)
 end
 
 function applyTM_l(A::MPSTensor, B::MPSTensor, x::Matrix)
-    gc_enable(false)
+    GC.enable(false)
     @tensor res[a, d] := conj(A[b, s, a]) * (x[b, c] * B[c, s, d]) #NOTE: This requires at least one intermediate array
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     res
 end
 applyTM_l(A::MPSTensor, B::MPSTensor, x::Vector) = applyTM_l(A, B, reshape(x, (bond_dim(A), bond_dim(B))))
@@ -220,10 +223,10 @@ applyTM_r(A::MPSTensor, B::MPSTensor, x::Vector) = applyTM_r(A, B, reshape(x, (b
 
 function applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
-    gc_enable(false)
+    GC.enable(false)
     @tensor TM12[lA,lB, rA,rB] := conj(B1[lB,s,mB]) * (A1[lA,s,mA] * TM2[mA,mB, rA,rB]) #NOTE: Intermediates, final permutation.
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     TM_convert(TM12)
 end
 
@@ -275,7 +278,7 @@ function worklen_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T
 end
 
 function workvec_applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
-    Vector{T}(worklen_applyTM_r(A1, B1, TM2))
+    Vector{T}(undef, worklen_applyTM_r(A1, B1, TM2))
 end
 
 function workvec_applyTM_r!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
@@ -292,9 +295,9 @@ function tm_eigs_sparse(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::Int
     
     x = zeros(T, (D,DB))
     if dirn == :L
-        f = (v::AbstractVector) -> vec(applyTM_l(A, B, copy!(x, v)))
+        f = (v::AbstractVector) -> vec(applyTM_l(A, B, copyto!(x, v)))
     else
-        f = (v::AbstractVector) -> vec(applyTM_r(A, B, copy!(x, v)))
+        f = (v::AbstractVector) -> vec(applyTM_r(A, B, copyto!(x, v)))
     end
     
     fmap = LinearMap{T}(f, D*DB)
@@ -314,7 +317,7 @@ function tm_eigs_dense(A::MPSTensor{T}, B::MPSTensor{T}) where {T}
     DB = bond_dim(B)
     
     TM = reshape(TM, (DA*DB,DA*DB))
-    ev, eVr = eig(TM)
+    ev, eVr = eigen(TM)
     eVl = inv(eVr)'
     
     eVmr = Matrix[reshape(eVr[:,j], (DA,DB)) for j in 1:size(eVr, 2)]
@@ -339,30 +342,30 @@ end
 function tm_dominant_eigs(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=8) where {T}
     evl, evr, eVl, eVr = tm_eigs(A, B, 1, D_dense_max=D_dense_max)
     
-    indmaxl = findmax(abs(x) for x in evl)[2]
-    indmaxr = findmax(abs(x) for x in evr)[2]
+    indmaxl = argmax(abs.(evl))
+    indmaxr = argmax(abs.(evr))
     
     tol = sqrt(eps(real(T))) #If one of the checks hits this upper bound, something went horribly wrong!
     
     if abs(evl[indmaxl] - evr[indmaxr]) > tol
-        warn("Largest magnitude eigenvalues do not match!", evl[indmaxl], evr[indmaxr])
+        @warn "Largest magnitude eigenvalues do not match!" evl[indmaxl] evr[indmaxr]
     end
     
     dominant_ev = evl[indmaxl]
     
     if imag(dominant_ev) > tol
-        warn("Largest eigenvalue is not real!", dominant_ev)
+        @warn "Largest eigenvalue is not real!" dominant_ev
     end
     
     l = eVl[indmaxl]
-    scale!(l, 1.0/vecnorm(l)) #tm_eigs_dense does not normalize the left eigenvectors
+    rmul!(l, 1.0/norm(l)) #tm_eigs_dense does not normalize the left eigenvectors
     r = eVr[indmaxr]
     
     #We need this to be 1
     n = vec(l) ⋅ vec(r)
     abs_n = abs(n)
     
-    abs_n < tol && warn("l and r are orthogonal!", abs_n)
+    abs_n < tol && @warn "l and r are orthogonal!" abs_n
     
     phase_n = abs_n/n
     sfac = 1.0/sqrt(abs_n)
@@ -374,8 +377,8 @@ function tm_dominant_eigs(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=8) 
     #Fix the phase on l using the phase of n
     phase_l = phase_r * conj(phase_n)
     
-    scale!(l, phase_l * sfac)
-    scale!(r, phase_r * sfac)
+    rmul!(l, phase_l * sfac)
+    rmul!(r, phase_r * sfac)
     
     #force exact Hermiticity
     lh = (l + l')/2
@@ -387,25 +390,25 @@ function tm_dominant_eigs(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=8) 
     l = convert(Matrix{T}, lh)
     r = convert(Matrix{T}, rh)
     
-    vecnorm(lh - l) > tol && warn("l was not made Hermitian")
-    vecnorm(rh - r) > tol && warn("r was not made Hermitian")
+    norm(lh - l) > tol && @warn "l was not made Hermitian"
+    norm(rh - r) > tol && @warn "r was not made Hermitian"
     
     dominant_ev, l, r
 end
 
 function gauge_transform(A::MPSTensor, g::Matrix, gi::Matrix)
-    gc_enable(false)
+    GC.enable(false)
     @tensor Anew[a,s,d] := g[a,b] * A[b,s,c] * gi[c,d] #NOTE: Requires a temporary array
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     Anew
 end
 
 function canonicalize_left(l::Matrix{T}, r::Matrix{T}) where {T}
     tol = sqrt(eps(real(T)))
     
-    evl, Ul = eig(Hermitian(l))
-    vecnorm(Ul * Ul' - I) > tol && warn("Nonunintary eigenvectors.")
+    evl, Ul = eigen(Hermitian(l))
+    norm(Ul * Ul' - I) > tol && @warn "Nonunintary eigenvectors."
 
     sevl = Diagonal(sqrt.(complex.(evl)))
     g = sevl * Ul'
@@ -414,8 +417,8 @@ function canonicalize_left(l::Matrix{T}, r::Matrix{T}) where {T}
     r = g * Hermitian(r) * g'
     r = Hermitian((r + r')/2)
     
-    evr, Ur = eig(r)
-    vecnorm(Ur * Ur' - I) > tol && warn("Nonunintary eigenvectors.")
+    evr, Ur = eigen(r)
+    norm(Ur * Ur' - I) > tol && @warn "Nonunintary eigenvectors."
     
     gi = gi * Ur
     g = Ur' * g
@@ -448,26 +451,26 @@ end
 
 
 function TM_dense_MPO(A::MPSTensor, B::MPSTensor, o::MPOTensor)::MPS_MPO_TM
-    gc_enable(false)
+    GC.enable(false)
     @tensor TM[k1,m1,b1, k2,m2,b2] := (A[k1, s1, k2] * o[m1,s1,m2,t1]) * conj(B[b1, t1, b2])
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     TM
 end
 
 function applyTM_MPO_l(A::MPSTensor, B::MPSTensor, o::MPOTensor, TM2::MPS_MPO_TM)::MPS_MPO_TM
-    gc_enable(false)
+    GC.enable(false)
     @tensor TM21[k1,m1,b1, k3,m3,b3] := ((TM2[k1,m1,b1, k2,m2,b2] * conj(B[b2, t2, b3])) * o[m2,s2,m3,t2]) * A[k2, s2, k3]
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     TM21
 end
 
 function applyTM_MPO_r(A::MPSTensor, B::MPSTensor, o::MPOTensor, TM2::MPS_MPO_TM)::MPS_MPO_TM
-    gc_enable(false)
+    GC.enable(false)
     @tensor TM12[k1,m1,b1, k3,m3,b3] :=  conj(B[b1, t1, b2]) * (o[m1,s1,m2,t1] * (A[k1, s1, k2] * TM2[k2,m2,b2, k3,m3,b3]))
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     TM12
 end
 
@@ -514,7 +517,7 @@ function worklen_applyTM_MPO_l(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{
 end
 
 function workvec_applyTM_MPO_l(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
-    Vector{T}(worklen_applyTM_MPO_l(A1, B1, o, TM2))
+    Vector{T}(undef, worklen_applyTM_MPO_l(A1, B1, o, TM2))
 end
 
 function workvec_applyTM_MPO_l!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
@@ -523,7 +526,7 @@ function workvec_applyTM_MPO_l!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor
 end
 
 function res_applyTM_MPO_l(A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
-    Array{T,6}((size(TM2)[1:3]..., bond_dim(A1,2),size(o,3),bond_dim(B1,2)))
+    Array{T,6}(undef, (size(TM2)[1:3]..., bond_dim(A1,2),size(o,3),bond_dim(B1,2)))
 end
 
 function res_applyTM_MPO_l!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
@@ -638,7 +641,7 @@ workvec_applyTM_MPO_r(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MP
     workvec_applyTM_MPO_r!(Vector{T}(), A, B, o, TM2)
 
 function res_applyTM_MPO_r(A::MPSTensor{T}, B::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}
-    Array{T,6}((bond_dim(A,1),size(o,1),bond_dim(B,1),size(TM2)[4:6]...))
+    Array{T,6}(undef, (bond_dim(A,1),size(o,1),bond_dim(B,1),size(TM2)[4:6]...))
 end
 
 function res_applyTM_MPO_r!(res::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, o::MPOTensor{T}, TM2::MPS_MPO_TM{T})::MPS_MPO_TM{T} where {T}

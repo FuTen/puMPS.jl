@@ -1,11 +1,14 @@
 
 module puMPS
 
+using LinearAlgebra
 using TensorOperations
 using LinearMaps
+using Arpack
 using Optim
 
-using MPS
+include("MPS.jl")
+using .MPS
 
 export puMPState, rand_puMPState, mps_tensor, num_sites, set_mps_tensor!,
        apply_blockTM_l, blockTM_dense,

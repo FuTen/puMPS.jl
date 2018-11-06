@@ -2,7 +2,7 @@
 """
     Represents a tangent vector, with momentum `p=2π/N*k`, living in the tangent space of a puMPState `state`.
 """
-type puMPSTvec{T}
+mutable struct puMPSTvec{T}
     state::puMPState{T}
     B::MPSTensor{T}
     k::Float64 #p=2π/N*k
@@ -19,14 +19,14 @@ num_sites(Tvec::puMPSTvec) = num_sites(Tvec.state)
 spin(Tvec::puMPSTvec) = Tvec.k
 momentum(Tvec::puMPSTvec) = 2π/num_sites(Tvec) * spin(Tvec)
 
-set_tvec_tensor!{T}(Tvec::puMPSTvec{T}, B::MPSTensor{T}) = Tvec.B = B
+set_tvec_tensor!(Tvec::puMPSTvec{T}, B::MPSTensor{T}) where {T} = Tvec.B = B
 
 """
     Base.norm{T}(Tvec::puMPSTvec{T})
 
 Computes the norm of a puMPState tangent vector `Tvec`.
 """
-function Base.norm{T}(Tvec::puMPSTvec{T})
+function LinearAlgebra.norm(Tvec::puMPSTvec{T}) where {T}
     N = num_sites(Tvec)
     A, B = mps_tensors(Tvec)
     p = momentum(Tvec)
@@ -54,7 +54,7 @@ end
 
 Normalizes a puMPState tangent vector `Tvec` in place.
 """
-Base.normalize!{T}(Tvec::puMPSTvec{T}) = scale!(Tvec.B, 1.0/norm(Tvec))
+LinearAlgebra.normalize!(Tvec::puMPSTvec{T}) where {T} = scale!(Tvec.B, 1.0/norm(Tvec))
 
 """
     expect{T}(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T})
@@ -62,7 +62,7 @@ Base.normalize!{T}(Tvec::puMPSTvec{T}) = scale!(Tvec.B, 1.0/norm(Tvec))
 The expectation value of a translation-invariant operator specified as an MPO
 with periodic boundary conditions, with respect to the puMPState tangent vector `Tvec`.
 """
-function expect{T}(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T})
+function expect(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T}) where {T}
     A, B = mps_tensors(Tvec)
     OB, OM = O
 
@@ -88,7 +88,7 @@ function expect{T}(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T})
 end
 
 #Slower version of the above
-function expect_using_overlap{T}(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T})
+function expect_using_overlap(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T}) where {T}
     OB, OM = O
     expect(Tvec, MPOTensor{T}[OB, (OM for j in 1:num_sites(Tvec)-1)...])
 end
@@ -99,8 +99,8 @@ end
 The expectation value of a global product of on-site operators `O` with
 respect to the puMPState tangent vector `Tvec`.
 """
-function expect_global_product{T,TO}(Tvec::puMPSTvec{T}, O::Matrix{TO})
-    Or = reshape(O.', (1,size(O,2),1,size(O,1)))
+function expect_global_product(Tvec::puMPSTvec{T}, O::Matrix{TO}) where {T,TO}
+    Or = copy(reshape(transpose(O), (1,size(O,2),1,size(O,1))))
     O_MPO = (Or,Or)
     expect(Tvec, O_MPO)
 end
@@ -114,7 +114,7 @@ vector `Tvec`.
 Note: This is not the most efficient implementation, since it uses `overlap()` and
       does not take advantage of the two tangent vectors being the same.
 """
-function expect{T}(Tvec::puMPSTvec{T}, O::MPO_open{T})
+function expect(Tvec::puMPSTvec{T}, O::MPO_open{T}) where {T}
     overlap(Tvec, O, Tvec)
 end
 
@@ -129,8 +129,8 @@ is taken in the physical space. They must have the same number of physical sites
 The operator MPO may have between 1 and `N = num_sites()` tensors.
 In case it has `N` tensors, it may have a bond around the circle, between sites `N` and 1.
 """
-function overlap{T}(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
-    TAA_all::Vector{Array}=Array[], TBAs_all::Vector{Array}=Array[])
+function overlap(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
+    TAA_all::Vector{Array}=Array[], TBAs_all::Vector{Array}=Array[]) where {T}
 
     A1, B1 = mps_tensors(Tvec1)
     A2, B2 = mps_tensors(Tvec2)
@@ -214,7 +214,7 @@ function overlap{T}(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
     trace(TBBs)
 end
 
-function fidelity{T}(Tvec2::puMPSTvec{T}, Tvec1::puMPSTvec{T})
+function fidelity(Tvec2::puMPSTvec{T}, Tvec1::puMPSTvec{T}) where {T}
     N = num_sites(Tvec1)
     @assert num_sites(Tvec2) == N
     overlap(Tvec2, MPOTensor{T}[], Tvec1)
@@ -226,7 +226,7 @@ end
 Precompute some data for `overlap()`, useful for cases where many overlaps are computed
 with tangent vectors living in the same tangent space.
 """
-function overlap_precomp_samestate{T}(O::MPO_open{T}, Tvec1::puMPSTvec{T})
+function overlap_precomp_samestate(O::MPO_open{T}, Tvec1::puMPSTvec{T}) where {T}
     A1, B1 = mps_tensors(Tvec1)
     p1 = momentum(Tvec1)
     N = num_sites(Tvec1)
@@ -277,7 +277,7 @@ Compute the matrix elements of the operator `O` in the basis of tangent vectors 
 
 CAUTION: Possibly broken?
 """
-function op_in_basis{T}(Tvec_basis::Vector{puMPSTvec{T}}, O::MPO_open{T})
+function op_in_basis(Tvec_basis::Vector{puMPSTvec{T}}, O::MPO_open{T}) where {T}
     Nvec = length(Tvec_basis)
 
     M = state(Tvec_basis[1])
@@ -301,7 +301,7 @@ tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_
 Computes the physical metric induced on the tangent space of the puMPState `M` for the tangent-space
 momentum sectors specified in `ks`. The momenta are `ps = 2π/N .* ks` where `N = num_sites(M)`.
 """
-function tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}, L::Int=1)
+function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}, L::Int=1) where {T}
     #Time cost O(N*d^2*D^6).. could save a factor of dD by implementing the sparse mat-vec operation, but then we'd add a factor Nitr
     #space cost O(N)
     A = mps_tensor(M)
@@ -315,11 +315,11 @@ function tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Ve
     Gpart = zeros(T, (D,d,D, D,d,D))
 
     #Add I on the physical index. This is the same-site term.
-    let e = eye(T, d^L), blk = TM_convert(blkTMs[N-L])
-        gc_enable(false)
-        @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = e[Pt,Pb] * blk[V2t,V2b, V1t,V1b]
-        gc_enable(true)
-        gc(false)
+    let E = Matrix{T}(I,d^L,d^L), blk = TM_convert(blkTMs[N-L])
+        GC.enable(false)
+        @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = E[Pt,Pb] * blk[V2t,V2b, V1t,V1b]
+        GC.enable(true)
+        GC.gc(false)
         for j in 1:length(ks)
             BLAS.axpy!(N, Gpart, Gs[j])
         end
@@ -329,34 +329,34 @@ function tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Ve
     Ablk = A
     @show L
     for j in 1:L
-        e = eye(T, d^(L-j))
+        E = Matrix{T}(I,d^(L-j),d^(L-j))
         blk = TM_convert(blkTMs[N-L-j])
 
-        gc_enable(false)
+        GC.enable(false)
         @tensor Gpart_pre[V1b,Pb,V2b, V1t,Pt,V2t] := Ablk[vt,Pb,V1t] * conj(Ablk[V2b,Pt,vb]) * blk[V2t,vb, vt,V1b]
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
 
         Gpart_r = reshape(Gpart, (D,d^j,d^(L-j),D, D,d^(L-j),d^j,D))
-        gc_enable(false)
-        @tensor Gpart_r[V1b,Pb1,Pb2,V2b, V1t,Pt1,Pt2,V2t] = Gpart_pre[V1b,Pb1,V2b, V1t,Pt2,V2t] * e[Pb2,Pt1]
-        gc_enable(true)
-        gc(false)
+        GC.enable(false)
+        @tensor Gpart_r[V1b,Pb1,Pb2,V2b, V1t,Pt1,Pt2,V2t] = Gpart_pre[V1b,Pb1,V2b, V1t,Pt2,V2t] * E[Pb2,Pt1]
+        GC.enable(true)
+        GC.gc(false)
 
         for k in 1:length(ps)
             BLAS.axpy!(N*cis(ps[k]*L), Gpart, Gs[k])
         end
 
-        gc_enable(false)
+        GC.enable(false)
         @tensor Gpart_pre[V1b,Pb,V2b, V1t,Pt,V2t] = Ablk[V2t,Pb,vt] * blk[vt,V2b,V1t,vb] * conj(Ablk[vb,Pt,V1b])
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
 
         Gpart_r = reshape(Gpart, (D,d^(L-j),d^j,D, D,d^j,d^(L-j),D))
-        gc_enable(false)
-        @tensor Gpart_r[V1b,Pb2,Pb1,V2b, V1t,Pt2,Pt1,V2t] = Gpart_pre[V1b,Pb1,V2b, V1t,Pt2,V2t] * e[Pb2,Pt1]
-        gc_enable(true)
-        gc(false)
+        GC.enable(false)
+        @tensor Gpart_r[V1b,Pb2,Pb1,V2b, V1t,Pt2,Pt1,V2t] = Gpart_pre[V1b,Pb1,V2b, V1t,Pt2,V2t] * E[Pb2,Pt1]
+        GC.enable(true)
+        GC.gc(false)
 
         for k in 1:length(ps)
             BLAS.axpy!(N*cis(ps[k]*(N-L)), Gpart, Gs[k])
@@ -373,21 +373,21 @@ function tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Ve
     right_T = zeros(T, (D,d,D, D,D))
     for i in 2L:N-2L
         blk = TM_convert(blkTMs[i-1])
-        gc_enable(false)
+        GC.enable(false)
         @tensor left_T[V1b, V2t,V2b, V1t,Pt] = Ablk[V1t,Pt,vt] * blk[vt,V1b, V2t,V2b]
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
 
         blk = TM_convert(blkTMs[N-i-1])
-        gc_enable(false)
+        GC.enable(false)
         @tensor right_T[V1t,Pb,V1b, V2t,V2b] = conj(Ablk[V1b,Pb,vb]) * blk[V1t,vb, V2t,V2b]
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
 
-        gc_enable(false)
+        GC.enable(false)
         @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = left_T[V2b, V1t,vb, vt,Pb] * right_T[V2t,Pt,vb, vt,V1b] #complete loop, cost O(d^2 * D^6)
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
         for j in 1:length(ps)
             BLAS.axpy!(N*cis(ps[j]*i), Gpart, Gs[j])
         end
@@ -407,7 +407,7 @@ This assumption is used as follows: We fix the first tensor of the MPO to always
 `B` tensor of one of the tangent vectors. We then sum over all locations of the `B` tensor of the other tangent vector.
 This removes N-1 redundant calculations.
 """
-function tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MPO_open{T}, ks::Vector{<:Real})
+function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MPO_open{T}, ks::Vector{<:Real}) where {T}
     A = mps_tensor(M)
     N = num_sites(M)
     ps = 2π/N .* ks
@@ -416,11 +416,11 @@ function tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op:
     #This is essentially an MPO TM, but with a physical index on the left instead of an MPO index.
     op_1 = op[1]
     op_n = op[2]
-    gc_enable(false)
+    GC.enable(false)
     @tensor blk_l[V1t,P,M1,V1b, V2t,M2,V2b] := ((((A[V1t,p1,vt] * op_1[M1,p1,m,P])
                                              * A[vt,p2t,V2t]) * op_n[m,p2t,M2,p2b]) * conj(A[V1b,p2b,V2b]))
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
 
     #We also need block TM's for the latter part of the Hamiltonian. We will add the gap on the left later.
     #We precompute these right blocks, since we will use the intermediates
@@ -435,10 +435,10 @@ function tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op:
     #Same-site term
     blk_r = pop!(blks_r) #block for N-1 sites
     op_n = op[1]
-    gc_enable(false)
+    GC.enable(false)
     @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] := op_n[m2,Pt,m1,Pb] * blk_r[V2t,m1,V2b, V1t,m2,V1b]
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     for j in 1:length(ks)
         BLAS.axpy!(N, part, op_effs[j])
     end
@@ -446,11 +446,11 @@ function tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op:
     #Nearest-neighbour term with conjugate gap on the left, gap on the right. Conjugate gap is site 1.
     blk_r = pop!(blks_r) #block for N-2 sites
     op_1 = op[1]; op_n = op[2]
-    gc_enable(false)
+    GC.enable(false)
     @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = (op_1[m3,pt,m1,Pb] * (A[vt,pt,V1t] *
                                                 (op_n[m1,Pt,m2,pb] * (conj(A[V2b,pb,vb]) * blk_r[V2t,m2,vb, vt,m3,V1b]))))
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     for j in 1:length(ks)
         BLAS.axpy!(N*cis(ps[j]), part, op_effs[j])
     end
@@ -459,11 +459,11 @@ function tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op:
     for n in 3:N-1 #if conj(gap) is at site 1, gap is at site n
         blk_r = pop!(blks_r) #N-n sites
         op_n = op[n]
-        gc_enable(false)
+        GC.enable(false)
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = blk_l[vt,Pb,m3,V2b, V1t,m1,vb1] *
                                                   (op_n[m1,Pt,m2,pb] * (conj(A[vb1,pb,vb2]) * blk_r[V2t,m2,vb2, vt,m3,V1b]))
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
         for j in 1:length(ks)
             BLAS.axpy!(N*cis(ps[j]*(n-1)), part, op_effs[j])
         end
@@ -484,10 +484,10 @@ function tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op:
     #Nearest-neighbour term with gap on the left, conjugate gap on the right. Conjugate gap is site 1.
 
     op_N = op[N]
-    gc_enable(false)
+    GC.enable(false)
     @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = (blk_l[V2t,Pb,m2,V2b, V1t,m1,vb] * conj(A[vb,p,V1b])) * op_N[m1,Pt,m2,p]
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     for j in 1:length(ks)
         BLAS.axpy!(N*cis(ps[j]*(N-1)), part, op_effs[j])
     end
@@ -497,7 +497,7 @@ end
 
 #This will return the transfer matrix (TM) from site nL to site nR, given a boundary Hamiltonian centred at the
 #boundary between sites N and 1.
-function blockTM_MPO_boundary{T}(M::puMPState{T}, op_b::MPO_open{T}, blkTMs::Vector{MPS_MPO_TM{T}}, nL::Int, nR::Int)
+function blockTM_MPO_boundary(M::puMPState{T}, op_b::MPO_open{T}, blkTMs::Vector{MPS_MPO_TM{T}}, nL::Int, nR::Int) where {T}
     A = mps_tensor(M)
     N = num_sites(M)
     Nop = length(op_b)
@@ -551,7 +551,7 @@ end
 
 #This will return the boundary MPO tensor for site n. Where the MPO does not act on site n,
 #return a zero-length result.
-function op_term_MPO_boundary{T}(M::puMPState{T}, op_b::MPO_open{T}, n::Int)
+function op_term_MPO_boundary(M::puMPState{T}, op_b::MPO_open{T}, n::Int) where {T}
     A = mps_tensor(M)
     N = num_sites(M)
     Nop = length(op_b)
@@ -582,8 +582,8 @@ See `tangent_space_metric_and_MPO()`.
 This is very similar to the OBC MPO case, except that we now have a
 short MPO `op_b` centred on the boundary between sites N and 1.
 """
-function tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op_b::MPO_open{T},
-                                        ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}})
+function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op_b::MPO_open{T},
+                                        ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}) where {T}
     A = mps_tensor(M)
     N = num_sites(M)
     ps = 2π/N .* ks
@@ -598,10 +598,10 @@ function tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPStat
     #On-site term
     blk = blockTM_MPO_boundary(M, op_b, blkTMs, 2, N)
     op_b_1 = op_term_MPO_boundary(M, op_b, 1)
-    gc_enable(false)
+    GC.enable(false)
     @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] := blk[V2t,m2,V2b, V1t,m1,V1b] * op_b_1[m1,Pt,m2,Pb]
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     for j in 1:length(ks)
         BLAS.axpy!(N, part, op_effs[j])
     end
@@ -609,7 +609,7 @@ function tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPStat
     #NN-term 1, with conjugate gap (site 1) then gap
     blk = blockTM_MPO_boundary(M, op_b, blkTMs, 3, N)
     op_b_n = op_term_MPO_boundary(M, op_b, 2)
-    gc_enable(false)
+    GC.enable(false)
     if length(op_b_n) == 0
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = op_b_1[m2,pt,m1,Pb] * (A[vt,pt,V1t] * (conj(A[V2b,Pt,vb])
                 * blk[V2t,m1,vb, vt,m2,V1b]))
@@ -617,8 +617,8 @@ function tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPStat
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = op_b_1[m3,pt,m1,Pb] *
         (A[vt,pt,V1t] * (op_b_n[m1,Pt,m2,pb] * (conj(A[V2b,pb,vb]) * blk[V2t,m2,vb, vt,m3,V1b])))
     end
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     for j in 1:length(ks)
         BLAS.axpy!(N*cis(ps[j]), part, op_effs[j])
     end
@@ -626,27 +626,27 @@ function tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPStat
     #gap at site n
     for n in 3:N-1
         blkL = blockTM_MPO_boundary(M, op_b, blkTMs, 2, n-1)
-        gc_enable(false)
+        GC.enable(false)
         @tensor blkL_cgap[V1t,M1,P,V1b, V2t,M2,V2b] := op_b_1[M1,p,m,P] * (A[V1t,p,vt] * blkL[vt,m,V1b, V2t,M2,V2b])
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
 
         blkR = blockTM_MPO_boundary(M, op_b, blkTMs, n+1, N)
         op_b_n = op_term_MPO_boundary(M, op_b, n)
-        gc_enable(false)
+        GC.enable(false)
         if length(op_b_n) == 0
             @tensor blkR_gap[V1t,P,M1,V1b, V2t,M2,V2b] := conj(A[V1b,P,vb]) * blkR[V1t,M1,vb, V2t,M2,V2b]
         else
             #Note: This is never called for a nearest-neighbour boundary Hamiltonian
             @tensor blkR_gap[V1t,P,M1,V1b, V2t,M2,V2b] := op_b_n[M1,P,m,p] * (conj(A[V1b,p,vb]) * blkR[V1t,m,vb, V2t,M2,V2b])
         end
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
 
-        gc_enable(false)
+        GC.enable(false)
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = blkL_cgap[vt,m2,Pb,V2b, V1t,m1,vb] * blkR_gap[V2t,Pt,m1,vb, vt,m2,V1b]
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
         for j in 1:length(ks)
             BLAS.axpy!(N*cis(ps[j]*(n-1)), part, op_effs[j])
         end
@@ -655,7 +655,7 @@ function tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPStat
     #NN-term 2, with gap (site N) then conjugate gap (site 1)
     blk = blockTM_MPO_boundary(M, op_b, blkTMs, 2, N-1)
     op_b_n = op_term_MPO_boundary(M, op_b, N)
-    gc_enable(false)
+    GC.enable(false)
     if length(op_b_n) == 0
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = ((op_b_1[m2,pt,m1,Pb] * (A[V2t,pt,vt] * blk[vt,m1,V2b, V1t,m2,vb])) *
             conj(A[vb,Pt,V1b]))
@@ -663,8 +663,8 @@ function tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPStat
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = ((op_b_1[m3,pt,m1,Pb] * (A[V2t,pt,vt] * blk[vt,m1,V2b, V1t,m2,vb])) *
             conj(A[vb,pb,V1b])) * op_b_n[m2,Pt,m3,pb]
     end
-    gc_enable(true)
-    gc(false)
+    GC.enable(true)
+    GC.gc(false)
     for j in 1:length(ks)
         BLAS.axpy!(N*cis(ps[j]*(N-1)), part, op_effs[j])
     end
@@ -672,7 +672,7 @@ function tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPStat
     op_effs
 end
 
-function tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MPO_PBC_uniform{T}, ks::Vector{<:Real})
+function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MPO_PBC_uniform{T}, ks::Vector{<:Real}) where {T}
     N = num_sites(M)
 
     op_boundary, op_bulk = op
@@ -682,7 +682,7 @@ function tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op:
 end
 
 
-function tangent_space_MPO{T}(M::puMPState{T}, op::MPO_PBC_uniform{T}, ks::Vector{<:Real})
+function tangent_space_MPO(M::puMPState{T}, op::MPO_PBC_uniform{T}, ks::Vector{<:Real}) where {T}
     D = bond_dim(M)
     d = phys_dim(M)
     N = num_sites(M)
@@ -691,7 +691,7 @@ function tangent_space_MPO{T}(M::puMPState{T}, op::MPO_PBC_uniform{T}, ks::Vecto
     tangent_space_MPO!(op_effs, M, op, ks)
 end
 
-function tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MPO_open_uniform{T}, ks::Vector{<:Real})
+function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MPO_open_uniform{T}, ks::Vector{<:Real}) where {T}
     N = num_sites(M)
     opL, opM, opR = op
 
@@ -709,7 +709,7 @@ vector momenta (of the ket tangent vector) specified in `ks`.
 The sum of the OBC and boundary parts of the operator must be translation invariant (up to a phase), which we exploit
 to reduce the cost of the computation.
 """
-function tangent_space_MPO{T}(M::puMPState{T}, op::Union{MPO_PBC_uniform_split{T}, MPO_PBC_split{T}}, ks::Vector{<:Real})
+function tangent_space_MPO(M::puMPState{T}, op::Union{MPO_PBC_uniform_split{T}, MPO_PBC_split{T}}, ks::Vector{<:Real}) where {T}
     A = mps_tensor(M)
     D = bond_dim(M)
     d = phys_dim(M)
@@ -726,7 +726,7 @@ function tangent_space_MPO{T}(M::puMPState{T}, op::Union{MPO_PBC_uniform_split{T
     op_effs
 end
 
-function tangent_space_MPO{T}(M::puMPState{T}, op::MPO_open{T}, ks::Vector{<:Real})
+function tangent_space_MPO(M::puMPState{T}, op::MPO_open{T}, ks::Vector{<:Real}) where {T}
     A = mps_tensor(M)
     D = bond_dim(M)
     d = phys_dim(M)
@@ -738,7 +738,7 @@ function tangent_space_MPO{T}(M::puMPState{T}, op::MPO_open{T}, ks::Vector{<:Rea
     op_effs
 end
 
-function tangent_space_MPO{T}(M::puMPState{T}, op::MPO_open_uniform{T}, ks::Vector{<:Real})
+function tangent_space_MPO(M::puMPState{T}, op::MPO_open_uniform{T}, ks::Vector{<:Real}) where {T}
     N = num_sites(M)
 
     op_full = MPOTensor{T}[op[1], (op[2] for j in 1:N-2)..., op[3]]
@@ -753,7 +753,7 @@ end
 Computes the tangent-space metric and effective operator given a physical-space operator as a periodic, uniform MPO,
 for the momentum sectors specified in `ks`. The momenta are `ps = 2π/N .* ks` where `N = num_sites(M)`.
 """
-function tangent_space_metric_and_MPO{T}(M::puMPState{T}, op::MPO_PBC_uniform{T}, ks::Vector{<:Real}, lambda_i::Matrix{T})
+function tangent_space_metric_and_MPO(M::puMPState{T}, op::MPO_PBC_uniform{T}, ks::Vector{<:Real}, lambda_i::Matrix{T}) where {T}
     @time Gs = tangent_space_metric(M, ks, blockTMs(M))
     @time op_effs = tangent_space_MPO(M, op, ks)
 
@@ -771,8 +771,8 @@ to reduce the cost of the computation.
 Metrics and effective Hamiltonians are computed for the momentum sectors specified in `ks`.
 The momenta are `ps = 2π/N .* ks` where `N = num_sites(M)`.
 """
-function tangent_space_metric_and_MPO{T}(M::puMPState{T}, op::Union{MPO_PBC_uniform_split{T}, MPO_PBC_split{T}},
-                                                      ks::Vector{<:Real}, lambda_i::Matrix{T})
+function tangent_space_metric_and_MPO(M::puMPState{T}, op::Union{MPO_PBC_uniform_split{T}, MPO_PBC_split{T}},
+                                                      ks::Vector{<:Real}, lambda_i::Matrix{T}) where {T}
     A = mps_tensor(M)
     D = bond_dim(M)
     d = phys_dim(M)
@@ -791,12 +791,12 @@ function tangent_space_metric_and_MPO{T}(M::puMPState{T}, op::Union{MPO_PBC_unif
     Gs, op_effs
 end
 
-function tspace_ops_to_center_gauge!{T}(ops::Vector{Array{T,6}}, lambda_i::Matrix{T})
+function tspace_ops_to_center_gauge!(ops::Vector{Array{T,6}}, lambda_i::Matrix{T}) where {T}
     for op in ops
-        gc_enable(false)
+        GC.enable(false)
         @tensor op[V1b,Pb,V2b, V1t,Pt,V2t] = lambda_i[vb,V2b] * (op[V1b,Pb,vb, V1t,Pt,vt] * lambda_i[vt,V2t])
-        gc_enable(true)
-        gc(false)
+        GC.enable(true)
+        GC.gc(false)
     end
     ops
 end
@@ -812,7 +812,7 @@ The number of eigenstates to be computed for each momentum sector is specified i
 
 The function returns a list of energies, a list of momenta (entries of `ks`), and a list of normalized tangent vectors.
 """
-function excitations!{T}(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Int}; pinv_tol::Real=1e-10)
+function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Int}; pinv_tol::Real=1e-10) where {T}
     M, lambda, lambda_i = canonicalize_left!(M)
     lambda_i = full(lambda_i)
 
@@ -823,8 +823,8 @@ function excitations!{T}(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_u
     excitations(M, Gs, Heffs, lambda_i, ks, num_states, pinv_tol=pinv_tol)
 end
 
-function excitations{T,Tk<:Real}(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Array{T,6}}, lambda_i::Matrix{T},
-                        ks::Vector{Tk}, num_states::Vector{Int}; pinv_tol::Real=1e-12)
+function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Array{T,6}}, lambda_i::Matrix{T},
+                        ks::Vector{Tk}, num_states::Vector{Int}; pinv_tol::Real=1e-12) where {T,Tk<:Real}
     D = bond_dim(M)
     d = phys_dim(M)
     Bshp = mps_tensor_shape(d, D)
@@ -873,7 +873,7 @@ Given an MPO representation of a Hamiltonian Fourier mode, split into a large OB
 MPO, `Hn_split`, computes its matrix elements in the basis of puMPState tangent vectors `Tvec_basis`
 which are assumed to live in the tangent space of the puMPState `M`.
 """
-function Hn_in_basis{T}(M::puMPState{T}, Hn_split::Tuple{Int, MPO_PBC_split{T}}, Tvec_basis::Vector{puMPSTvec{T}}, ks::Vector{<:Real})
+function Hn_in_basis(M::puMPState{T}, Hn_split::Tuple{Int, MPO_PBC_split{T}}, Tvec_basis::Vector{puMPSTvec{T}}, ks::Vector{<:Real}) where {T}
     #Hn is a Fourier mode of the Hamiltonian density with "momentum" n * 2pi/N
     #Each entry in ks, times 2pi/N is the momentum of one of the excitations (the ket).
     #Due to the way tangent_space_MPO() works, the momentum of the other excitation is automatically (ks[j] + n) * 2pi/N.

@@ -32,7 +32,7 @@ MPO_PBC_split{T} = Tuple{MPO_open{T}, MPO_open{T}}
     We need only store the MPS tensor `A`, which is the same for every site,
     and the number of sites for which `A` is intended to be used.
 """
-type puMPState{T}
+mutable struct puMPState{T}
     A::MPSTensor{T}
     N::Int #number of sites
 end
@@ -90,7 +90,7 @@ TM * (TM_M)^N
 function apply_blockTM_l(M::puMPState{T}, TM::MPS_MPO_TM{T}, N::Int) where {T}
     A = mps_tensor(M)
     work = workvec_applyTM_l(A, A)
-    TMres = zeros(TM)
+    TMres = zero(TM)
     TM = N > 1 ? copy(TM) : TM #Never overwrite TM!
     for i in 1:N
         applyTM_l!(TMres, A, A, TM, work) #D^5 d
@@ -107,7 +107,7 @@ Computes the `N`th power of the transfer matrix of the puMPState `M`. Time cost:
 function blockTM_dense(M::puMPState{T}, N::Int) where {T}
     #TODO: Depending on d vs. D, block the MPS tensors first to form an initial blockTM at cost D^4 d^blocksize.
     D = bond_dim(M)
-    TM = N == 0 ? reshape(kron(eye(T,D),eye(T,D)), (D,D,D,D)) : apply_blockTM_l(M, TM_dense(M), N-1)
+    TM = N == 0 ? eyeTM(T, D) : apply_blockTM_l(M, TM_dense(M), N-1)
     TM
 end
 
@@ -134,7 +134,7 @@ end
 The norm of the puMPState `M`, optionally reusing the precomputed 
 `N`th power of the transfer matrix `TM_N`, where `N = num_sites(M)`.
 """
-function Base.norm(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M))) where {T}
+function LinearAlgebra.norm(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M))) where {T}
     sqrt(tr(TM_N))
 end
 
@@ -144,25 +144,25 @@ end
 Normalizes the puMPState `M` in place, optionally reusing the precomputed 
 `N`th power of the transfer matrix `TM_N`, where `N = num_sites(M)`.
 """
-function Base.normalize!(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M))) where {T}
-    scale!(mps_tensor(M), T(1.0 / norm(M, TM_N=TM_N)^(1.0/num_sites(M))) )
+function LinearAlgebra.normalize!(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M))) where {T}
+    rmul!(mps_tensor(M), T(1.0 / norm(M, TM_N=TM_N)^(1.0/num_sites(M))) )
     M
 end
     
-Base.normalize(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M))) where {T} = normalize!(copy(M), TM_N=TM_N)
+LinearAlgebra.normalize(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M))) where {T} = normalize!(copy(M), TM_N=TM_N)
 
 """
     Base.normalize!{T}(M::puMPState{T}, blkTMs::Vector{MPS_MPO_TM{T}})
 
 Normalizes the puMPState `M` in place together with a set of precomputed powers of the transfer matrix `blkTMs`.
 """
-function Base.normalize!(M::puMPState{T}, blkTMs::Vector{MPS_MPO_TM{T}}) where {T}
+function LinearAlgebra.normalize!(M::puMPState{T}, blkTMs::Vector{MPS_MPO_TM{T}}) where {T}
     N = num_sites(M)
     normM = norm(M, TM_N=blkTMs[N])
     
-    scale!(mps_tensor(M), T(1.0 / normM^(1.0/N)) )
+    rmul!(mps_tensor(M), T(1.0 / normM^(1.0/N)) )
     for n in 1:N
-        scale!(blkTMs[n], T(1.0 / normM^(2.0/n)) ) 
+        rmul!(blkTMs[n], T(1.0 / normM^(2.0/n)) ) 
     end
     M, blkTMs
 end
@@ -344,7 +344,7 @@ function MPS.workvec_applyTM_MPO_l(M::puMPState{T}, O::MPO_open{T}, TM2s::Vector
     for j in 1:length(O)
         len = max(len, worklen_applyTM_MPO_l(A, A, O[j], TM2s[j]))
     end
-    workMPO = Vector{T}(len)
+    workMPO = Vector{T}(undef, len)
 end
 
 """
@@ -426,7 +426,7 @@ function derivatives_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_
     #Assumption: This is similarly accurate to subtracting I*e0 from the Hamiltonian itself.
     #The transfer matrices typically have similar norm before and after subtraction, even when
     #the final gradient has small physical norm.
-    LinAlg.axpy!(-e0, blkTMs[length(h)], TM_H) 
+    axpy!(-e0, blkTMs[length(h)], TM_H) 
     
     TM_H_res = similar(TM_H)    
     
@@ -442,16 +442,16 @@ function derivatives_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_
         
         #New H term
         TM_H_add = applyTM_MPO_l!(TMMPO_res, M, h, TM, workMPO)
-        BLAS.axpy!(-e0, blkTMs[j+length(h)], TM_H_add) #Subtract energy density e0 * I
+        axpy!(-e0, blkTMs[j+length(h)], TM_H_add) #Subtract energy density e0 * I
         
         j += 1
         TM = blkTMs[j]
         
-        BLAS.axpy!(real(T)(1.0), TM_H_add, TM_H) #add new H term to TM_H
+        axpy!(real(T)(1.0), TM_H_add, TM_H) #add new H term to TM_H
     end
     
     #effective ham terms that do not act on gradient site
-    LinAlg.axpy!(-length(h)*e0, blkTMs[N-1], TM_H) #Subtract energy density for the final terms
+    axpy!(-length(h)*e0, blkTMs[N-1], TM_H) #Subtract energy density for the final terms
 
     #Add only the A, leaving a conjugate gap.
     TM_H_r = TM_convert(TM_H)
@@ -486,7 +486,7 @@ function eff_Ham_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T
     #Assumption: This is similarly accurate to subtracting I*e0 from the Hamiltonian itself.
     #The transfer matrices typically have similar norm before and after subtraction, even when
     #the final gradient has small physical norm.
-    LinAlg.axpy!(-e0, blkTMs[length(h)], TM_H) 
+    axpy!(-e0, blkTMs[length(h)], TM_H) 
     
     TM_H_res = similar(TM_H)    
     
@@ -502,16 +502,16 @@ function eff_Ham_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T
         
         #New H term
         TM_H_add = applyTM_MPO_l!(TMMPO_res, M, h, TM, workMPO)
-        BLAS.axpy!(-e0, blkTMs[j+length(h)], TM_H_add) #Subtract energy density e0 * I
+        axpy!(-e0, blkTMs[j+length(h)], TM_H_add) #Subtract energy density e0 * I
         
         j += 1
         TM = blkTMs[j]
         
-        BLAS.axpy!(real(T)(1.0), TM_H_add, TM_H) #add new H term to TM_H
+        axpy!(real(T)(1.0), TM_H_add, TM_H) #add new H term to TM_H
     end
     
     #effective ham terms that do not act on gradient site
-    LinAlg.axpy!(-length(h)*e0, blkTMs[N-1], TM_H) #Subtract energy density for the final terms
+    axpy!(-length(h)*e0, blkTMs[N-1], TM_H) #Subtract energy density for the final terms
 
     e = eye(T, phys_dim(M))
     TM_H_r = TM_convert(TM_H)
@@ -533,7 +533,7 @@ function eff_Hams_Ac_C(M::puMPState{T}, lambda_i::AbstractMatrix{T}, Heff::MPS_M
     D = bond_dim(M)
     d = phys_dim(M)
 
-    lambda_i = full(lambda_i)
+    lambda_i = Matrix(lambda_i)
 
     blkTM_Nm1 = TM_convert(blkTM_Nm1) #there is no MPO content
 
@@ -569,8 +569,8 @@ function vumps_update_state(Ac::MPSTensor{T}, C::Matrix{T}) where {T}
     Ur,sr,Vr = svd(C' * reshape(Ac, (D, d*D)))
     Ar = reshape(Ur * Vr', size(Ac))
     
-    el = vecnorm(reshape(Ac, (d*D, D)) - reshape(Al, (d*D, D)) * C)
-    er = vecnorm(reshape(Ac, (D, d*D)) - C * reshape(Ar, (D, d*D)))
+    el = norm(reshape(Ac, (d*D, D)) - reshape(Al, (d*D, D)) * C)
+    er = norm(reshape(Ac, (D, d*D)) - C * reshape(Ar, (D, d*D)))
     
     Al, Ar, el, er
 end
@@ -585,8 +585,8 @@ function vumps_opt!(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Int=1
     Ac_normgrad = Inf
 
     @time M, C, Ci = canonicalize_left!(M)
-    C = full(C)
-    Ci = full(Ci)
+    C = Matrix(C)
+    Ci = Matrix(Ci)
     Al = mps_tensor(M)
     @tensor Ac[V1, P, V2] := Al[V1, P, v] * C[v, V2] 
     
@@ -600,10 +600,10 @@ function vumps_opt!(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Int=1
         Heff_Ac, N_Ac, Heff_C, N_C = eff_Hams_Ac_C(M, Ci, Heff_Al, blkTMs[N-1])
 
         @tensor Ac_grad[V1,P,V2] := Heff_Ac[V1,P,V2, v1,p,v2] * Ac[v1,p,v2]
-        Ac_normgrad = vecnorm(Ac_grad)
+        Ac_normgrad = norm(Ac_grad)
 
         @tensor C_grad[V1,V2] := Heff_C[V1,V2, v1,v2] * C[v1,v2]
-        C_normgrad = vecnorm(C_grad)
+        C_normgrad = norm(C_grad)
 
         Ac_new = vumps_local_gnd(Ac, Heff_Ac, N_Ac, stol, ncv=ncv)
         C_new = vumps_local_gnd(C, Heff_C, N_C, stol, ncv=ncv)
@@ -615,10 +615,10 @@ function vumps_opt!(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Int=1
         normalize!(M)
         M, C, Ci = canonicalize_left!(M)
         @show abs(C[1,1])
-        C = full(C)
-        Ci = full(Ci)
+        C = Matrix(C)
+        Ci = Matrix(Ci)
 
-        #scale!(Al, 1.0 / nrm^(1.0/num_sites(M)))
+        #rmul!(Al, 1.0 / nrm^(1.0/num_sites(M)))
         #set_mps_tensor!(M, Al)
         #FIXME: Probably need to scale C_new
         #normalize!(C_new)
@@ -680,7 +680,7 @@ function BiCGstab(M,V,X0,tol::Real; max_itr::Int=100)
         rho2 = rho1
     end 
     
-    !converged && warn("BiCGStab did not converge (tol: $tol, max_itr: $max_itr)")
+    !converged && @warn "BiCGStab did not converge (tol: $tol, max_itr: $max_itr)"
     
     x
 end
@@ -742,7 +742,7 @@ function gradient_central(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::M
     D = bond_dim(M)
     d = phys_dim(M)
     
-    inv_lambda = full(inv_lambda)
+    inv_lambda = Matrix(inv_lambda)
     
     T1 = TM_convert(length(blkTMs) >= N-1 ? blkTMs[N-1] : blockTM_dense(M, N-1))
     
@@ -753,7 +753,7 @@ function gradient_central(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::M
     
     @tensor d_Ac[v1,v2,s] := d_A[v1,s,vi] * inv_lambda[vi,v2] # now size (D,D,d)
     
-    grad_Ac = zeros(d_Ac)
+    grad_Ac = zero(d_Ac)
     
     if sparse_inverse
         grad_Ac_init = tensorcopy(grad_Ac_init, [:a,:b,:c], [:a,:c,:b]) # now size (D,D,d)
@@ -840,16 +840,16 @@ function line_search_energy(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad
         catch e
             if isa(e, EnergyHighException)
                 if attempt < max_attempts
-                    warn("Linesearch: Initial step was too large. Adjusting!")
+                    @warn "Linesearch: Initial step was too large. Adjusting!"
                     step *= 0.1
                     num_calls = 0
                 else
-                    warn("Linesearch: Initial step was too large. Aborting!")
+                    @warn "Linesearch: Initial step was too large. Aborting!"
                     res = e.stp, e.En
                     break
                 end
             elseif isa(e, WolfeAbortException)
-                info("Linesearch: Early stop due to good enough step!")
+                @info "Linesearch: Early stop due to good enough step!"
                 res = e.stp, e.En
                 break
             else
@@ -945,11 +945,11 @@ function minimize_energy_local_CG!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::I
 
     cg_steps = 0
 
-    ts = fill!(zeros(maxitr), NaN)
-    ens = fill!(zeros(maxitr), NaN)
-    ngs = fill!(zeros(maxitr), NaN)
-    steps = fill!(zeros(maxitr), NaN)
-    betas = fill!(zeros(maxitr), NaN)
+    ts = fill!(Vector{Float64}(undef, maxitr), NaN)
+    ens = fill!(similar(ts), NaN)
+    ngs = fill!(similar(ts), NaN)
+    steps = fill!(similar(ts), NaN)
+    betas = fill!(similar(ts), NaN)
 
     tic()
     for k in 1:maxitr
@@ -976,17 +976,17 @@ function minimize_energy_local_CG!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::I
         end
         
         if beta > 100
-            cg_steps_max > 1 && warn("Very large beta=$(beta), resetting CG after $cg_steps steps!")
+            cg_steps_max > 1 && @warn "Very large beta=$(beta), resetting CG after $cg_steps steps!"
             beta = 0.0
         end
 
         if cg_steps == cg_steps_max
-            cg_steps_max > 1 && info("Max. CG steps reached, resetting CG.")
+            cg_steps_max > 1 && @info "Max. CG steps reached, resetting CG."
             beta = 0.0
         end
 
         if step < 1e-5
-            cg_steps_max > 1 && warn("Previous step was very small, resetting CG after $cg_steps steps!")
+            cg_steps_max > 1 && @warn "Previous step was very small, resetting CG after $cg_steps steps!"
             beta = 0.0
         end
 
@@ -1000,9 +1000,9 @@ function minimize_energy_local_CG!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::I
         En_prev = En
         step_corr = min(max(step_internal, 0.001),0.1)
         step_internal, En = line_search_energy(M, En, step_dir, norm_grad^2, step_corr, hMPO,
-                                                        max_attempts=beta==0?3:1)
+                                                        max_attempts=(beta==0 ? 3 : 1))
         if En > En_prev && beta != 0
-            warn("Line search increased the energy, resetting CG after $cg_steps steps!")
+            @warn "Line search increased the energy, resetting CG after $cg_steps steps!"
             step_internal = 0.0
             En = En_prev
             step_dir = grad
