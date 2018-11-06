@@ -22,7 +22,7 @@ momentum(Tvec::puMPSTvec) = 2π/num_sites(Tvec) * spin(Tvec)
 set_tvec_tensor!(Tvec::puMPSTvec{T}, B::MPSTensor{T}) where {T} = Tvec.B = B
 
 """
-    Base.norm{T}(Tvec::puMPSTvec{T})
+    LinearAlgebra.norm(Tvec::puMPSTvec{T}) where {T}
 
 Computes the norm of a puMPState tangent vector `Tvec`.
 """
@@ -50,14 +50,14 @@ function LinearAlgebra.norm(Tvec::puMPSTvec{T}) where {T}
 end
 
 """
-    Base.normalize!{T}(Tvec::puMPSTvec{T}) = rmul!(Tvec.B, 1.0/norm(Tvec))
+    LinearAlgebra.normalize!(Tvec::puMPSTvec{T}) where {T} = rmul!(Tvec.B, 1.0/norm(Tvec))
 
 Normalizes a puMPState tangent vector `Tvec` in place.
 """
 LinearAlgebra.normalize!(Tvec::puMPSTvec{T}) where {T} = rmul!(Tvec.B, 1.0/norm(Tvec))
 
 """
-    expect{T}(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T})
+    expect(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T}) where {T}
 
 The expectation value of a translation-invariant operator specified as an MPO
 with periodic boundary conditions, with respect to the puMPState tangent vector `Tvec`.
@@ -94,7 +94,7 @@ function expect_using_overlap(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T}) where {
 end
 
 """
-    expect_global_product{T,TO}(Tvec::puMPSTvec{T}, O::Matrix{TO})
+    expect_global_product(Tvec::puMPSTvec{T}, O::Matrix{TO}) where {T,TO}
 
 The expectation value of a global product of on-site operators `O` with
 respect to the puMPState tangent vector `Tvec`.
@@ -106,7 +106,7 @@ function expect_global_product(Tvec::puMPSTvec{T}, O::Matrix{TO}) where {T,TO}
 end
 
 """
-    expect{T}(Tvec::puMPSTvec{T}, O::MPO_open{T})
+    expect(Tvec::puMPSTvec{T}, O::MPO_open{T}) where {T}
 
 The expectation value of an arbitrary MPO with respect to the puMPState tangent
 vector `Tvec`.
@@ -119,7 +119,8 @@ function expect(Tvec::puMPSTvec{T}, O::MPO_open{T}) where {T}
 end
 
 """
-    overlap{T}(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T})
+    overlap(Tvec2::puMPSTvec{T}, O::MPO_open{T}, Tvec1::puMPSTvec{T};
+        TAA_all::Vector{Array}=Array[], TBAs_all::Vector{Array}=Array[]) where {T}
 
 Computes the physical-space inner product `<Tvec2 | O | Tvec1>`,
 where `Tvec1` and `Tvec2` are puMPState tangent vectors and `O` is an operator in MPO form.
@@ -221,7 +222,7 @@ function fidelity(Tvec2::puMPSTvec{T}, Tvec1::puMPSTvec{T}) where {T}
 end
 
 """
-    overlap_precomp_samestate{T}(O::MPO_open{T}, Tvec1::puMPSTvec{T})
+    overlap_precomp_samestate(O::MPO_open{T}, Tvec1::puMPSTvec{T}) where {T}
 
 Precompute some data for `overlap()`, useful for cases where many overlaps are computed
 with tangent vectors living in the same tangent space.
@@ -271,7 +272,7 @@ function overlap_precomp_samestate(O::MPO_open{T}, Tvec1::puMPSTvec{T}) where {T
 end
 
 """
-    op_in_basis{T}(Tvec_basis::Vector{puMPSTvec{T}}, O::MPO_open{T})
+    op_in_basis(Tvec_basis::Vector{puMPSTvec{T}}, O::MPO_open{T}) where {T}
 
 Compute the matrix elements of the operator `O` in the basis of tangent vectors `Tvec_basis`.
 
@@ -296,7 +297,7 @@ end
 
 
 """
-tangent_space_metric{T}(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}})
+    tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}, L::Int=1) where {T}
 
 Computes the physical metric induced on the tangent space of the puMPState `M` for the tangent-space
 momentum sectors specified in `ks`. The momenta are `ps = 2π/N .* ks` where `N = num_sites(M)`.
@@ -397,7 +398,7 @@ function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vecto
 end
 
 """
-tangent_space_MPO!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MPO_open{T}, ks::Vector{<:Real})
+    tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MPO_open{T}, ks::Vector{<:Real}) where {T}
 
 Compute the effective operator on the tangent space parameters, in the momentum sectors specified in `ks`, of the physical operator
 `op`, given as an MPO. This version adds the result to existing tangent-space operators `op_effs`.
@@ -574,7 +575,8 @@ function op_term_MPO_boundary(M::puMPState{T}, op_b::MPO_open{T}, n::Int) where 
 end
 
 """
-    tangent_space_MPO_boundary!{T}(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op_b::MPO_open{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}})
+    tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op_b::MPO_open{T},
+        ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}) where {T}
 
 Compute the boundary part of the effective MPO in the momentum sectors specified in `ks`.
 See `tangent_space_metric_and_MPO()`.
@@ -701,7 +703,7 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
 end
 
 """
-    tangent_space_MPO{T}(M::puMPState{T}, op::Union{MPO_PBC_uniform_split{T}, MPO_PBC_split{T}}, ks::Vector{<:Real})
+    tangent_space_MPO(M::puMPState{T}, op::Union{MPO_PBC_uniform_split{T}, MPO_PBC_split{T}}, ks::Vector{<:Real}) where {T}
 
 Given an MPO representation of an operator `op`, split into a large OBC MPO and a boundary
 MPO, this computes its representation on the tangent space of the puMPState `M` for the tangent
@@ -748,7 +750,7 @@ end
 
 
 """
-    tangent_space_metric_and_MPO{T}(M::puMPState{T}, op::MPO_PBC_uniform{T}, ks::Vector{<:Real}, lambda_i::Matrix{T})
+    tangent_space_metric_and_MPO(M::puMPState{T}, op::MPO_PBC_uniform{T}, ks::Vector{<:Real}, lambda_i::Matrix{T}) where {T}
 
 Computes the tangent-space metric and effective operator given a physical-space operator as a periodic, uniform MPO,
 for the momentum sectors specified in `ks`. The momenta are `ps = 2π/N .* ks` where `N = num_sites(M)`.
@@ -761,8 +763,8 @@ function tangent_space_metric_and_MPO(M::puMPState{T}, op::MPO_PBC_uniform{T}, k
 end
 
 """
-    tangent_space_metric_and_MPO{T}(M::puMPState{T}, op::Union{MPO_PBC_uniform_split{T}, MPO_PBC_split{T}},
-                                                 ks::Vector{<:Real}, lambda_i::Matrix{T})
+    tangent_space_metric_and_MPO(M::puMPState{T}, op::Union{MPO_PBC_uniform_split{T}, MPO_PBC_split{T}},
+        ks::Vector{<:Real}, lambda_i::Matrix{T}) where {T}
 
 Computes the tangent-space metric and effective operator given a physical-space operator as a combination
 of an open MPO, representing for example the Hamiltonian with open boundary conditions (OBC), and a boundary MPO.
@@ -802,7 +804,7 @@ function tspace_ops_to_center_gauge!(ops::Vector{Array{T,6}}, lambda_i::Matrix{T
 end
 
 """
-    excitations!{T}(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{Int}, num_states::Vector{Int}; pinv_tol::Real=1e-10)
+    excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Int}; pinv_tol::Real=1e-10) where {T}
 
 Computes eigenstates of the effective Hamiltonian obtained by projecting `H` onto the tangent space of the puMPState `M`.
 This is done in the momentum sectors specified in `ks`, where each entry of `k = ks[j]` specified a momentum `k*2pi/N`,
@@ -867,7 +869,7 @@ function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Arra
 end
 
 """
-    Hn_in_basis{T}(M::puMPState{T}, Hn_split::Tuple{Int, MPO_PBC_split}, Tvec_basis::Vector{puMPSTvec{T}}, ks::Vector{<:Real})
+    Hn_in_basis(M::puMPState{T}, Hn_split::Tuple{Int, MPO_PBC_split{T}}, Tvec_basis::Vector{puMPSTvec{T}}, ks::Vector{<:Real}) where {T}
 
 Given an MPO representation of a Hamiltonian Fourier mode, split into a large OBC MPO and a boundary
 MPO, `Hn_split`, computes its matrix elements in the basis of puMPState tangent vectors `Tvec_basis`

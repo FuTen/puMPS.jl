@@ -1,26 +1,26 @@
 """
-    typealias MPO_PBC_uniform{T} Tuple{MPOTensor{T},MPOTensor{T}}
+    MPO_PBC_uniform{T}
 
 A Matrix Product Operator (MPO) with one translation-invariant middle (bulk) tensor and one boundary tensor.
 """
 MPO_PBC_uniform{T} = Tuple{MPOTensor{T},MPOTensor{T}}
 
 """
-    typealias MPO_open_uniform{T} Tuple{MPOTensor{T},MPOTensor{T},MPOTensor{T}} 
+    MPO_open_uniform{T}
 
 The left, middle (translation-invariant bulk), and right tensors of an MPO with open boundary conditions.
 """
 MPO_open_uniform{T} = Tuple{MPOTensor{T},MPOTensor{T},MPOTensor{T}} 
 
 """
-    typealias MPO_PBC_uniform_split{T} Tuple{MPO_open_uniform{T}, MPO_open{T}}
+    MPO_PBC_uniform_split{T}
 
 An MPO for a circular system, split into an open uniform MPO for the bulk and a generic open MPO for the boundary.
 """
 MPO_PBC_uniform_split{T} = Tuple{MPO_open_uniform{T}, MPO_open{T}}
 
 """
-typealias MPO_PBC_split{T} Tuple{MPO_open{T}, MPO_open{T}}
+    MPO_PBC_split{T}
 
 An MPO for a circular system, split into an generic open MPO for the bulk and a generic open MPO for the boundary.
 """
@@ -79,11 +79,11 @@ MPS.canonicalize_left(M::puMPState) = canonicalize_left!(copy(M))
 MPS.TM_dense(M::puMPState) = TM_dense(mps_tensor(M), mps_tensor(M))
 
 """
-    apply_blockTM_l{T}(M::puMPState{T}, TM::MPS_MPO_TM{T}, N::Int)
+    apply_blockTM_l(M::puMPState{T}, TM::MPS_MPO_TM{T}, N::Int) where {T}
 
 Applies `N` transfer matrices `TM_M` of the puMPState `M` 
 to an existing transfer matrix `TM` by acting to the left:
-```
+```julia
 TM * (TM_M)^N
 ```
 """
@@ -100,7 +100,7 @@ function apply_blockTM_l(M::puMPState{T}, TM::MPS_MPO_TM{T}, N::Int) where {T}
 end
 
 """
-    blockTM_dense{T}(M::puMPState{T}, N::Int)
+    blockTM_dense(M::puMPState{T}, N::Int) where {T}
 
 Computes the `N`th power of the transfer matrix of the puMPState `M`. Time cost: O(`bond_dim(M)^5`).
 """
@@ -112,7 +112,7 @@ function blockTM_dense(M::puMPState{T}, N::Int) where {T}
 end
 
 """
-    blockTMs{T}(M::puMPState{T}, N::Int=num_sites(M))
+    blockTMs(M::puMPState{T}, N::Int=num_sites(M)) where {T}
 
 Computes the powers of the transfer matrix of the puMPState `M` up to and including the `N`th power.
 Time cost: O(`bond_dim(M)^5`).
@@ -129,7 +129,7 @@ function blockTMs(M::puMPState{T}, N::Int=num_sites(M)) where {T}
 end
 
 """
-    Base.norm{T}(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M)))
+    LinearAlgebra.norm(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M))) where {T}
 
 The norm of the puMPState `M`, optionally reusing the precomputed 
 `N`th power of the transfer matrix `TM_N`, where `N = num_sites(M)`.
@@ -139,7 +139,7 @@ function LinearAlgebra.norm(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M
 end
 
 """
-    Base.normalize!{T}(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M)))
+    LinearAlgebra.normalize!(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M))) where {T}
     
 Normalizes the puMPState `M` in place, optionally reusing the precomputed 
 `N`th power of the transfer matrix `TM_N`, where `N = num_sites(M)`.
@@ -152,7 +152,7 @@ end
 LinearAlgebra.normalize(M::puMPState{T}; TM_N::MPS_MPO_TM{T}=blockTM_dense(M, num_sites(M))) where {T} = normalize!(copy(M), TM_N=TM_N)
 
 """
-    Base.normalize!{T}(M::puMPState{T}, blkTMs::Vector{MPS_MPO_TM{T}})
+    LinearAlgebra.normalize!(M::puMPState{T}, blkTMs::Vector{MPS_MPO_TM{T}}) where {T}
 
 Normalizes the puMPState `M` in place together with a set of precomputed powers of the transfer matrix `blkTMs`.
 """
@@ -168,7 +168,7 @@ function LinearAlgebra.normalize!(M::puMPState{T}, blkTMs::Vector{MPS_MPO_TM{T}}
 end
 
 """
-    expect_nn{Ts, Top}(M::puMPState{Ts}, op::Array{Top,4}; MPS_is_normalized::Bool=true, blkTMs::Vector{MPS_MPO_TM{Ts}}=MPS_MPO_TM{T}[])
+    expect_nn(M::puMPState{Ts}, op::Array{Top,4}; MPS_is_normalized::Bool=true, blkTMs::Vector{MPS_MPO_TM{Ts}}=MPS_MPO_TM{Ts}[]) where {Ts, Top}
 
 Computes the expectation value with respect to `M` of a nearest-neighbour operator,
 supplied as a 4-dimensional `Array` defined as
@@ -200,7 +200,7 @@ function expect_nn(M::puMPState{Ts}, op::Array{Top,4}; MPS_is_normalized::Bool=t
 end
 
 """
-    expect{T}(M::puMPState{T}, op::MPO_open{T}; MPS_is_normalized::Bool=true, blkTMs::Vector{MPS_MPO_TM{T}}=MPS_MPO_TM{T}[])
+    expect(M::puMPState{T}, op::MPO_open{T}; MPS_is_normalized::Bool=true, blkTMs::Vector{MPS_MPO_TM{T}}=MPS_MPO_TM{T}[]) where {T}
 
 Computes the expectation value of an MPO. The MPO may have between 1 and `num_sites(M)` sites.
 If it has the maximum number of sites, it is allowed to have open or periodic boundary conditions.
@@ -242,7 +242,7 @@ function expect(M::puMPState{T}, op::MPO_open{T}; MPS_is_normalized::Bool=true, 
 end
 
 """
-    expect{T}(M::puMPState{T}, O::MPO_PBC_uniform{T})
+    expect(M::puMPState{T}, O::MPO_PBC_uniform{T}) where {T}
 
 Computes the expectation value of a global MPO with periodic boundary conditions.
 See MPS for the definition of `MPO_PBC_uniform`.
@@ -255,7 +255,7 @@ function expect(M::puMPState{T}, O::MPO_PBC_uniform{T}) where {T}
 end
 
 """
-    MPS.TM_dense_MPO{T}(M::puMPState{T}, O::MPO_open{T})::MPS_MPO_TM{T}
+    MPS.TM_dense_MPO(M::puMPState{T}, O::MPO_open{T})::MPS_MPO_TM{T} where {T}
 
 The transfer matrix for the entire length of the MPO `O`.
 """
@@ -265,7 +265,7 @@ function MPS.TM_dense_MPO(M::puMPState{T}, O::MPO_open{T})::MPS_MPO_TM{T} where 
 end   
 
 """
-    blockTMs_MPO{T}(M::puMPState{T}, O::MPO_PBC_uniform{T}, N::Int=num_sites(M))
+    blockTMs_MPO(M::puMPState{T}, O::MPO_PBC_uniform{T}, N::Int=num_sites(M)) where {T}
 
 Block transfer matrices for the MPO `O` for sites 1 to n, with `n in 1:N`.
 These are not all powers of the same transfer matrix, since the MPO with PBC
@@ -293,7 +293,8 @@ function blockTMs_MPO(M::puMPState{T}, O::MPO_PBC_uniform{T}, N::Int=num_sites(M
 end
 
 """
-    MPS.applyTM_MPO_l{T}(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T}; 
+    MPS.applyTM_MPO_l(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T}; 
+        work::Vector{T}=Vector{T}())::MPS_MPO_TM{T} where {T}
 
 Apply an MPS-MPO transfer matrix `TM1` derived from the puMPState `M` and the MPO `O` to an
 exisiting MPS-MPO transfer matrix `TM2`, acting to the left: `TM2 * TM1`.
@@ -318,7 +319,7 @@ function MPS.applyTM_MPO_l(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T};
 end
 
 """
-    MPS.res_applyTM_MPO_l{T}(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T})
+    MPS.res_applyTM_MPO_l(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T}) where {T}
 
 Prepare appropriately-sized result arrays `TMres` to hold the intermediate and final results of 
 `applyTM_MPO_l!(TMres, M, O, TM2)`.
@@ -334,7 +335,7 @@ function MPS.res_applyTM_MPO_l(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{
 end
 
 """
-    MPS.workvec_applyTM_MPO_l{T}(M::puMPState{T}, O::MPO_open{T}, TM2s::Vector{MPS_MPO_TM{T}})
+    MPS.workvec_applyTM_MPO_l(M::puMPState{T}, O::MPO_open{T}, TM2s::Vector{MPS_MPO_TM{T}}) where {T}
 
 Prepare working-memory vector for applyTM_MPO_l!().
 """
@@ -348,7 +349,7 @@ function MPS.workvec_applyTM_MPO_l(M::puMPState{T}, O::MPO_open{T}, TM2s::Vector
 end
 
 """
-    MPS.applyTM_MPO_l!{T}(TMres::Vector{MPS_MPO_TM{T}}, M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T}
+    MPS.applyTM_MPO_l!(TMres::Vector{MPS_MPO_TM{T}}, M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T}, work::Vector{T})::MPS_MPO_TM{T} where {T}
 
 Apply an MPS-MPO transfer matrix `TM1` derived from the puMPState `M` and the MPO `O` to an
 exisiting MPS-MPO transfer matrix `TM2`, acting to the left:
@@ -369,7 +370,8 @@ function MPS.applyTM_MPO_l!(TMres::Vector{MPS_MPO_TM{T}}, M::puMPState{T}, O::MP
 end
 
 """
-    MPS.applyTM_MPO_r{T}(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T}; work::Vector{T}=Vector{T}())::MPS_MPO_TM{T}
+    MPS.applyTM_MPO_r(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T};
+            work::Vector{T}=Vector{T}())::MPS_MPO_TM{T} where {T}
 
 Apply an MPS-MPO transfer matrix `TM1` derived from the puMPState `M` and the MPO `O` to an
 exisiting MPS-MPO transfer matrix `TM2`, acting to the right: `TM1 * TM2`.
@@ -393,7 +395,7 @@ function MPS.applyTM_MPO_r(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T};
 end
 
 """
-    derivatives_1s{T}(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Real=zero(real(T)))
+    derivatives_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Real=0.0) where {T}
 
 This returns the energy derivatives with respect to the elements of the conjugate `conj(A)` of one
 tensor of the MPS `M`. This the same as the result of applying the effective Hamiltonian for one 
@@ -715,11 +717,11 @@ end
 # end
 
 """
-    gradient_central{T}(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::MPSTensor{T};
-        sparse_inverse::Bool=true, pinv_tol::Real=1e-12, 
+    gradient_central(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::MPSTensor{T}; 
+        sparse_inverse::Bool=true, pinv_tol::Real=1e-12,
         max_itr::Int=500, tol::Real=1e-12,
         grad_Ac_init::MPSTensor{T}=rand_MPSTensor(T, phys_dim(M), bond_dim(M)),
-        blkTMs::Vector{MPS_MPO_TM{T}}=MPS_MPO_TM{T}[])
+        blkTMs::Vector{MPS_MPO_TM{T}}=MPS_MPO_TM{T}[]) where {T}
 
 Converts the energy derivatives supplied by `derivatives_1s` into the energy gradient for
 a single tensor of the puMPState `M`.
@@ -789,7 +791,9 @@ struct WolfeAbortException{T<:Real} <: Exception
 end
 
 """
-    line_search_energy{T}(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad_normsq::Real, step::Real, hMPO::MPO_open{T}; itr::Int=10, rel_tol::Real=1e-1, max_attempts::Int=3, wolfe_c1::Real=100.0)
+    line_search_energy(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad_normsq::Real, step::Real, hMPO::MPO_open{T}; 
+        itr::Int=10, rel_tol::Real=1e-1, max_attempts::Int=3, wolfe_c1::Real=100.0
+        ) where {T}
 
 Conducts a line search starting at the puMPState `M` to find the puMPState closest to the energetic minimum along 
 the search-direction specified by `grad`.
@@ -862,10 +866,12 @@ function line_search_energy(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad
 end
 
 """
-    minimize_energy_local!{T}(M::puMPState{T}, hMPO::MPO_open{T}, itr::Int; 
+    minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Int;
+        tol::Real=1e-6,
         step::Real=0.001,
         grad_max_itr::Int=500,
-        grad_sparse_inverse::Bool=true)
+        grad_sparse_inverse::Bool=false,
+        use_phys_grad::Bool=true) where {T}
 
 Optimises the puMPState `M` to minimize the energy with respect to a translation-invariant local Hamiltonian.
 The local Hamiltonian term is supplied as an open MPO `hMPO`, which is a vector of `MPOTensor`:
