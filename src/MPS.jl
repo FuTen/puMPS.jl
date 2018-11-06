@@ -324,6 +324,8 @@ function tm_eigs_sparse(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::Int
     fmap = LinearMap{T}(f, D*DB)
     
     ev, eV, nconv, niter, nmult, resid = eigs(fmap, nev=nev, which=:LM, ritzvec=true, v0=vec(x0))
+
+    dirn == :L && conj!(ev)
     
     #Reshape eigenvectors to (D,DB) matrices
     eVm = Matrix[reshape(eV[:,j], (D,DB)) for j in 1:size(eV, 2)]
