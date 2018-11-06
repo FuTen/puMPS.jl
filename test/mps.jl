@@ -71,26 +71,46 @@ end
     d = 3; AD = 4; BD = 2
     for T in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand_MPSTensor_unitary(T,d,AD,AD)
-        B = rand_MPSTensor_unitary(T,d,BD,BD)
-        ev, evmL, evmR = tm_eigs_dense(A,B)
+        B = rand_MPSTensor(T,d,BD,BD)
+        ev, eVmL, eVmR = tm_eigs_dense(A,B)
         srt = sortperm(ev, by=abs, rev=true)
         ev = ev[srt]
-        evmL = evmL[srt]
-        evmR = evmR[srt]
+        eVmL = eVmL[srt]
+        eVmR = eVmR[srt]
 
         for j = 1:length(ev)
-            y = applyTM_r(A,B,evmR[j])
-            @test y ≈ evmR[j] * ev[j]
+            y = applyTM_r(A,B,eVmR[j])
+            @test y ≈ eVmR[j] * ev[j]
 
-            y = applyTM_l(A,B,evmL[j])
-            @test y ≈ evmL[j] * conj(ev[j])
+            y = applyTM_l(A,B,eVmL[j])
+            @test y ≈ eVmL[j] * conj(ev[j])
         end
 
-        evlS, evrS, evmLS, evmRS = tm_eigs(A,B,4,D_dense_max=0)
-        @test argmax(abs.(evlS)) == argmax(abs.(evrS)) == 1
-        @show T
-        @test evlS[1] ≈ ev[1]
-        @test evrS[1] ≈ ev[1]
+        evLS, evRS, eVmLS, eVmRS = tm_eigs(A,B,4,D_dense_max=0)
+        @test argmax(abs.(evLS)) == argmax(abs.(evRS)) == 1
+        @test abs(evLS[1]) ≈ abs(ev[1])
+        @test abs(evRS[1]) ≈ abs(ev[1])
+
+        tol = sqrt(eps(real(T)))
+        for j = 1:length(evLS)
+            ind = findfirst(x->abs(x - evLS[j]) < tol, ev)
+            @test ind !== nothing
+
+            y = applyTM_l(A,B,eVmLS[j])
+            @test y ≈ eVmLS[j] * conj(evLS[j])
+
+            ind = findfirst(x->abs(x - evRS[j]) < tol, ev)
+            @test ind !== nothing
+
+            y = applyTM_r(A,B,eVmRS[j])
+            @test y ≈ eVmRS[j] * evRS[j]
+        end
+
+        ev1, l, r = tm_dominant_eigs(A,A,D_dense_max=1000)
+        ev1S, lS, rS = tm_dominant_eigs(A,A,D_dense_max=0)
+        @test ev1 ≈ ev1S
+        @test l ≈ lS
+        @test r ≈ rS
     end
 end
 
