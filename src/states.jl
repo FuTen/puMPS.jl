@@ -515,7 +515,8 @@ function eff_Ham_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T
     #effective ham terms that do not act on gradient site
     axpy!(-length(h)*e0, blkTMs[N-1], TM_H) #Subtract energy density for the final terms
 
-    e = eye(T, phys_dim(M))
+    d = phys_dim(M)
+    e = Matrix{T}(I,d,d)
     TM_H_r = TM_convert(TM_H)
     @tensor Heff[Vb1, Pb, Vb2, Vt1, Pt, Vt2] := TM_H_r[Vt2,Vb2, Vt1,Vb1] * e[Pt, Pb]
     
@@ -542,7 +543,7 @@ function eff_Hams_Ac_C(M::puMPState{T}, lambda_i::AbstractMatrix{T}, Heff::MPS_M
     #Heff is for the uniform tensors in M (usual in left canonical form)
     @tensor Heff_Ac[V1b,Pb,V2b, V1t,Pt,V2t] := lambda_i[vb,V2b] * (Heff[V1b,Pb,vb, V1t,Pt,vt] * lambda_i[vt,V2t])
 
-    e = eye(d)
+    e = Matrix{T}(I,d,d)
     @tensor N_Ac_noe[V1b,V2b, V1t,V2t] := (lambda_i[vb,V2b] * (blkTM_Nm1[vt,vb, V1t,V1b] * lambda_i[vt,V2t]))
     @tensor N_Ac[V1b,Pb,V2b, V1t,Pt,V2t] := N_Ac_noe[V1b,V2b, V1t,V2t] * e[Pb,Pt]
 
