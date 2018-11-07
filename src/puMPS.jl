@@ -10,7 +10,7 @@ using Optim
 include("MPS.jl")
 using .MPS
 
-export puMPState, rand_puMPState, mps_tensor, num_sites, set_mps_tensor!,
+export puMPState, rand_puMPState, mps_tensor, num_sites, bond_dim, phys_dim, set_mps_tensor!,
        apply_blockTM_l, blockTM_dense,
        expect_nn, expect,
        canonicalize_left!,
