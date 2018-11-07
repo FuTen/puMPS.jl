@@ -7,7 +7,10 @@ N = 32
 
 M = rand_puMPState(ComplexF64, 2, D, N)
 
-minimize_energy_local!(M, ANNNI_local_MPO(ComplexF64, delta1=delta, delta2=delta), 100, step=0.1)
+H = ANNNI_local_MPO(ComplexF64, delta1=delta, delta2=delta)
+
+vumps_opt!(M, H, 1e-6, maxitr=5) #Pre-optimization using DMRG-like method
+minimize_energy_local!(M, H, 100, step=0.1)
 
 println("Computing excitations!")
 
