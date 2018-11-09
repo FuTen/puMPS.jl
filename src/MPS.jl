@@ -37,8 +37,8 @@ bond_dim_L(A::MPSTensor) = size(A,1)
 bond_dim_R(A::MPSTensor) = size(A,3)
 bond_dim(A::MPSTensor) = bond_dim_L(A)
 phys_dim(A::MPSTensor) = size(A,2)
-mps_tensor_shape(d::Int, D::Int) = (D,d,D)
-mps_tensor_shape(d::Int, D1::Int, D2::Int) = (D1,d,D2)
+mps_tensor_shape(d::Integer, D::Integer) = (D,d,D)
+mps_tensor_shape(d::Integer, D1::Integer, D2::Integer) = (D1,d,D2)
 
 """
 MPO tensor:
@@ -54,10 +54,10 @@ MPOTensor{T} = Array{T,4}
 struct IdentityMPOTensor
 end
 
-mpo_tensor_shape(d::Int, M::Int) = (M,d,M,d)
-mpo_tensor_shape(d::Int, M1::Int, M2::Int) = (M1,d,M2,d)
+mpo_tensor_shape(d::Integer, M::Integer) = (M,d,M,d)
+mpo_tensor_shape(d::Integer, M1::Integer, M2::Integer) = (M1,d,M2,d)
 
-function randunitary(::Type{T}, N::Int)::Matrix{T} where {T}
+function randunitary(::Type{T}, N::Integer)::Matrix{T} where {T}
     if T <: Complex
         rT = real(T)
         A = complex.(randn(rT, N,N), randn(rT, N,N)) / √2
@@ -71,13 +71,13 @@ function randunitary(::Type{T}, N::Int)::Matrix{T} where {T}
 end
 
 #Note: An MPS generated this way already has r proportional to I and largest tm eigenvalue = 1
-function rand_MPSTensor_unitary(::Type{T}, d::Int, D1::Int, D2::Int)::MPSTensor{T} where {T}
+function rand_MPSTensor_unitary(::Type{T}, d::Integer, D1::Integer, D2::Integer)::MPSTensor{T} where {T}
     U = randunitary(T, max(D1,d*D2))
     reshape(U[1:D1,1:d*D2], mps_tensor_shape(d,D1,D2))
 end
-rand_MPSTensor_unitary(T, d::Int, D::Int) = rand_MPSTensor_unitary(T, d, D, D)
+rand_MPSTensor_unitary(T, d::Integer, D::Integer) = rand_MPSTensor_unitary(T, d, D, D)
 
-function rand_MPSTensor(::Type{T}, d::Int, D1::Int, D2::Int)::MPSTensor{T}  where {T}
+function rand_MPSTensor(::Type{T}, d::Integer, D1::Integer, D2::Integer)::MPSTensor{T}  where {T}
     shp = mps_tensor_shape(d,D1,D2)
     if T <: Complex
         rT = real(T)
@@ -87,9 +87,9 @@ function rand_MPSTensor(::Type{T}, d::Int, D1::Int, D2::Int)::MPSTensor{T}  wher
     end
     A
 end
-rand_MPSTensor(T, d::Int, D::Int) = rand_MPSTensor(T, d, D, D)
+rand_MPSTensor(T, d::Integer, D::Integer) = rand_MPSTensor(T, d, D, D)
 
-function rand_MPOTensor(::Type{T}, d::Int, M1::Int, M2::Int)::MPOTensor{T}  where {T}
+function rand_MPOTensor(::Type{T}, d::Integer, M1::Integer, M2::Integer)::MPOTensor{T}  where {T}
     shp = mpo_tensor_shape(d,M1,M2)
     if T <: Complex
         rT = real(T)
@@ -99,7 +99,7 @@ function rand_MPOTensor(::Type{T}, d::Int, M1::Int, M2::Int)::MPOTensor{T}  wher
     end
     O
 end
-rand_MPOTensor(T, d::Int, M::Int) = rand_MPOTensor(T,d,M,M)
+rand_MPOTensor(T, d::Integer, M::Integer) = rand_MPOTensor(T,d,M,M)
 
 """
 Dense transfer matrix with MPO:
@@ -142,7 +142,7 @@ function TM_dense(A::MPSTensor, B::MPSTensor)::MPS_MPO_TM
     TM_convert(TM)
 end
 
-eyeTM(T::Type, D::Int)::MPS_MPO_TM = (e = Matrix{T}(I,D,D); reshape(kron(e,e), (D,1,D, D,1,D)))
+eyeTM(T::Type, D::Integer)::MPS_MPO_TM = (e = Matrix{T}(I,D,D); reshape(kron(e,e), (D,1,D, D,1,D)))
 
 function TM_dense_op_nn(A1::MPSTensor, A2::MPSTensor, B1::MPSTensor, B2::MPSTensor, op::Array{T,4})::MPS_MPO_TM where {T}
     @tensor TM[lA1,lB1,rA2,rB2] := ((A1[lA1, p1k, iA] * A2[iA, p2k, rA2]) * op[p1b, p2b, p1k, p2k]) * (conj(B1[lB1, p1b, iB]) * conj(B2[iB, p2b, rB2])) #NOTE: Allocates intermediate arrays
@@ -158,7 +158,7 @@ end
 #This is a workaround for StridedArray not including reshaped arrays formed from a FastContiguousSubArray in in Julia <= 0.6.
 #Since TensorOperations uses the StridedArray type, it misses these cases. Here, we use pointer manipulation to generate
 #views of sections of a vector with an arbitrary "size".
-function unsafe_reshaped_subvec(w::Vector{T}, ind1::Int, sz::NTuple) where {T}
+function unsafe_reshaped_subvec(w::Vector{T}, ind1::Integer, sz::NTuple) where {T}
     len = prod(sz)
     @assert length(w) >= ind1+len-1 "Vector is not big enough to hold subarray by $(ind1+len-1 - length(w)) elements!"
     unsafe_wrap(Array, pointer(w, ind1), sz)
@@ -307,7 +307,7 @@ function workvec_applyTM_r!(work::Vector{T}, A1::MPSTensor{T}, B1::MPSTensor{T},
     work = length(work) < len ? resize!(work, len) : work
 end
 
-function tm_eigs_sparse(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::Int=1; 
+function tm_eigs_sparse(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::Integer=1; 
                     x0::Matrix{T}=ones(T,(bond_dim(A), bond_dim(B)))) where {T}
     @assert dirn in (:L, :R)
     
@@ -349,7 +349,7 @@ function tm_eigs_dense(A::MPSTensor{T}, B::MPSTensor{T}) where {T}
     ev, eVml, eVmr
 end
 
-function tm_eigs(A::MPSTensor{T}, B::MPSTensor{T}, min_nev::Int; D_dense_max::Int=8) where {T}
+function tm_eigs(A::MPSTensor{T}, B::MPSTensor{T}, min_nev::Integer; D_dense_max::Integer=8) where {T}
     if bond_dim(A) * bond_dim(B) > D_dense_max^2
         evl, eVl = tm_eigs_sparse(A, B, :L, min_nev)
         evr, eVr = tm_eigs_sparse(A, B, :R, min_nev)
@@ -362,7 +362,7 @@ function tm_eigs(A::MPSTensor{T}, B::MPSTensor{T}, min_nev::Int; D_dense_max::In
     evl, evr, eVl, eVr
 end
 
-function tm_dominant_eigs(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Int=8) where {T}
+function tm_dominant_eigs(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Integer=8) where {T}
     evl, evr, eVl, eVr = tm_eigs(A, B, 1, D_dense_max=D_dense_max)
     
     indmaxl = argmax(abs.(evl))

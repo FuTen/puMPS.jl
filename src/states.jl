@@ -38,7 +38,7 @@ mutable struct puMPState{T}
 end
 
 #Generates a random `puMPState` in canonical form
-rand_puMPState(::Type{T}, d::Int, D::Int, N::Int) where {T} = puMPState(rand_MPSTensor_unitary(T, d, D), N)::puMPState{T}
+rand_puMPState(::Type{T}, d::Integer, D::Integer, N::Int) where {T} = puMPState(rand_MPSTensor_unitary(T, d, D), N)::puMPState{T}
 
 Base.copy(M::puMPState) = puMPState(copy(M.A), M.N)
 
@@ -79,7 +79,7 @@ MPS.canonicalize_left(M::puMPState) = canonicalize_left!(copy(M))
 MPS.TM_dense(M::puMPState) = TM_dense(mps_tensor(M), mps_tensor(M))
 
 """
-    apply_blockTM_l(M::puMPState{T}, TM::MPS_MPO_TM{T}, N::Int) where {T}
+    apply_blockTM_l(M::puMPState{T}, TM::MPS_MPO_TM{T}, N::Integer) where {T}
 
 Applies `N` transfer matrices `TM_M` of the puMPState `M` 
 to an existing transfer matrix `TM` by acting to the left:
@@ -87,7 +87,7 @@ to an existing transfer matrix `TM` by acting to the left:
 TM * (TM_M)^N
 ```
 """
-function apply_blockTM_l(M::puMPState{T}, TM::MPS_MPO_TM{T}, N::Int) where {T}
+function apply_blockTM_l(M::puMPState{T}, TM::MPS_MPO_TM{T}, N::Integer) where {T}
     A = mps_tensor(M)
     work = workvec_applyTM_l(A, A)
     TMres = zero(TM)
@@ -100,11 +100,11 @@ function apply_blockTM_l(M::puMPState{T}, TM::MPS_MPO_TM{T}, N::Int) where {T}
 end
 
 """
-    blockTM_dense(M::puMPState{T}, N::Int) where {T}
+    blockTM_dense(M::puMPState{T}, N::Integer) where {T}
 
 Computes the `N`th power of the transfer matrix of the puMPState `M`. Time cost: O(`bond_dim(M)^5`).
 """
-function blockTM_dense(M::puMPState{T}, N::Int) where {T}
+function blockTM_dense(M::puMPState{T}, N::Integer) where {T}
     #TODO: Depending on d vs. D, block the MPS tensors first to form an initial blockTM at cost D^4 d^blocksize.
     D = bond_dim(M)
     TM = N == 0 ? eyeTM(T, D) : apply_blockTM_l(M, TM_dense(M), N-1)
@@ -112,12 +112,12 @@ function blockTM_dense(M::puMPState{T}, N::Int) where {T}
 end
 
 """
-    blockTMs(M::puMPState{T}, N::Int=num_sites(M)) where {T}
+    blockTMs(M::puMPState{T}, N::Integer=num_sites(M)) where {T}
 
 Computes the powers of the transfer matrix of the puMPState `M` up to and including the `N`th power.
 Time cost: O(`bond_dim(M)^5`).
 """
-function blockTMs(M::puMPState{T}, N::Int=num_sites(M)) where {T}
+function blockTMs(M::puMPState{T}, N::Integer=num_sites(M)) where {T}
     A = mps_tensor(M)
     TMs = MPS_MPO_TM{T}[TM_dense(M)]
     work = workvec_applyTM_l(A, A)
@@ -265,13 +265,13 @@ function MPS.TM_dense_MPO(M::puMPState{T}, O::MPO_open{T})::MPS_MPO_TM{T} where 
 end   
 
 """
-    blockTMs_MPO(M::puMPState{T}, O::MPO_PBC_uniform{T}, N::Int=num_sites(M)) where {T}
+    blockTMs_MPO(M::puMPState{T}, O::MPO_PBC_uniform{T}, N::Integer=num_sites(M)) where {T}
 
 Block transfer matrices for the MPO `O` for sites 1 to n, with `n in 1:N`.
 These are not all powers of the same transfer matrix, since the MPO with PBC
 is generally not completely uniform.
 """
-function blockTMs_MPO(M::puMPState{T}, O::MPO_PBC_uniform{T}, N::Int=num_sites(M)) where {T}
+function blockTMs_MPO(M::puMPState{T}, O::MPO_PBC_uniform{T}, N::Integer=num_sites(M)) where {T}
     A = mps_tensor(M)
     OB, OM = O
     
@@ -578,7 +578,7 @@ function vumps_update_state(Ac::MPSTensor{T}, C::Matrix{T}) where {T}
     Al, Ar, el, er
 end
 
-function vumps_opt!(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Int=100, ncv=20) where {T}
+function vumps_opt!(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Integer=100, ncv=20) where {T}
     N = num_sites(M)
     blkTMs = blockTMs(M)
     normalize!(M, blkTMs)
@@ -638,7 +638,7 @@ function vumps_opt!(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Int=1
     M, Ac_normgrad
 end
 
-function BiCGstab(M,V,X0,tol::Real; max_itr::Int=100)
+function BiCGstab(M,V,X0,tol::Real; max_itr::Integer=100)
     #use BiCGSTAB, solve MX=V,with guess X0
     d = length(V)
     r = V - M*X0
@@ -695,7 +695,7 @@ end
 #     SLA = nothing
 # end
 
-# function BiCGstab_scipy(M,V,X0,tol::Real; max_itr::Int=100, max_attempts::Int=1)
+# function BiCGstab_scipy(M,V,X0,tol::Real; max_itr::Integer=100, max_attempts::Integer=1)
 #     res = nothing
 #     for j in 1:max_attempts
 #         res, info = SLA.bicgstab(M, V, X0, tol, maxiter=max_itr)
@@ -710,7 +710,7 @@ end
 #     res
 # end
 
-# function lGMRes_scipy(M,V,X0,tol::Real; max_itr::Int=100)
+# function lGMRes_scipy(M,V,X0,tol::Real; max_itr::Integer=100)
 #     res, info = SLA.lgmres(M, V, X0, tol, maxiter=max_itr)
 #     info < 0 && error("lGMRes failed due to illegal input or breakdown")
 #     info > 0 && warn("lGMRes did not converge (tol: $tol, max_itr: $max_itr)")
@@ -720,7 +720,7 @@ end
 """
     gradient_central(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::MPSTensor{T}; 
         sparse_inverse::Bool=true, pinv_tol::Real=1e-12,
-        max_itr::Int=500, tol::Real=1e-12,
+        max_itr::Integer=500, tol::Real=1e-12,
         grad_Ac_init::MPSTensor{T}=rand_MPSTensor(T, phys_dim(M), bond_dim(M)),
         blkTMs::Vector{MPS_MPO_TM{T}}=MPS_MPO_TM{T}[]) where {T}
 
@@ -738,7 +738,7 @@ The physical norm of the gradient is also computed and returned.
 """
 function gradient_central(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::MPSTensor{T}; 
         sparse_inverse::Bool=true, pinv_tol::Real=1e-12,
-        max_itr::Int=500, tol::Real=1e-12,
+        max_itr::Integer=500, tol::Real=1e-12,
         grad_Ac_init::MPSTensor{T}=rand_MPSTensor(T, phys_dim(M), bond_dim(M)),
         blkTMs::Vector{MPS_MPO_TM{T}}=MPS_MPO_TM{T}[]) where {T}
     N = num_sites(M)
@@ -793,13 +793,13 @@ end
 
 """
     line_search_energy(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad_normsq::Real, step::Real, hMPO::MPO_open{T}; 
-        itr::Int=10, rel_tol::Real=1e-1, max_attempts::Int=3, wolfe_c1::Real=100.0
+        itr::Integer=10, rel_tol::Real=1e-1, max_attempts::Integer=3, wolfe_c1::Real=100.0
         ) where {T}
 
 Conducts a line search starting at the puMPState `M` to find the puMPState closest to the energetic minimum along 
 the search-direction specified by `grad`.
 
-`En0` should contain the energy-density of `M`, which will be used as a refernce point: 
+`En0` should contain the energy-density of `M`, which will be used as a reference point: 
 Steps that increase the energy are avoided, although not completely excluded. 
 Where they occur, they will typically be small compared to `step`.
 
@@ -808,7 +808,7 @@ Where they occur, they will typically be small compared to `step`.
 `hMPO` is the local Hamiltonian term in MPO form. It is used to compute the energy density.
 """
 function line_search_energy(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad_normsq::Real, step::Real, hMPO::MPO_open{T}; 
-        itr::Int=10, rel_tol::Real=1e-1, max_attempts::Int=3, wolfe_c1::Real=100.0
+        itr::Integer=10, rel_tol::Real=1e-1, max_attempts::Integer=3, wolfe_c1::Real=100.0
     ) where {T}
     M_new = copy(M)
     num_calls::Int = 0
@@ -867,10 +867,10 @@ function line_search_energy(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad
 end
 
 """
-    minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Int;
+    minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Integer;
         tol::Real=1e-6,
         step::Real=0.001,
-        grad_max_itr::Int=500,
+        grad_max_itr::Integer=500,
         grad_sparse_inverse::Bool=false,
         use_phys_grad::Bool=true) where {T}
 
@@ -881,10 +881,10 @@ The local Hamiltonian term is supplied as an open MPO `hMPO`, which is a vector 
 This MPO has a range of `n` sites. The `MPOTensor`s `h1` and `hn` must have outer MPO bond dimension 1.
 For a nearest-neighbour Hamiltonian, `n=2`.
 """
-function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Int;
+function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Integer;
         tol::Real=1e-6,
         step::Real=0.001,
-        grad_max_itr::Int=500,
+        grad_max_itr::Integer=500,
         grad_sparse_inverse::Bool=false,
         use_phys_grad::Bool=true) where {T}
     blkTMs = blockTMs(M)
@@ -932,10 +932,10 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Int;
     M, norm_grad
 end
 
-function minimize_energy_local_CG!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Int;
+function minimize_energy_local_CG!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Integer;
     tol::Real=1e-6,
     step::Real=0.01,
-    cg_steps_max::Int=10,
+    cg_steps_max::Integer=10,
     use_phys_grad::Bool=true) where {T}
 
     blkTMs = blockTMs(M)

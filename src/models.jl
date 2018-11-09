@@ -1,14 +1,17 @@
-function ising_local_MPO(::Type{T}, shift::Float64=0.0; hz::Float64=1.0, hx::Float64=0.0)::MPO_open{T} where {T}
+function ising_local_MPO(::Type{T}, shift::Number=0.0; hz::Number=1.0, hx::Number=0.0)::MPO_open{T} where {T}
+    E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
     
-    h1 = zeros(Float64, 2,2,1,2)
-    h2 = zeros(Float64, 2,2,2,1)
+    h1_11 = -hz*Z - hx*X + shift*I
+
+    h1 = zeros(eltype(h1_11), 2,2,1,2)
+    h2 = zeros(eltype(h1_11), 2,2,2,1)
     
-    h1[:,:,1,1] = -hz*Z - hx*X + shift*I
+    h1[:,:,1,1] = h1_11
     h1[:,:,1,2] = -X
     
-    h2[:,:,1,1] = Matrix{Float64}(I,2,2)
+    h2[:,:,1,1] = E
     h2[:,:,2,1] = X
     
     h1 = permutedims(h1, (3,2,4,1)) #[m1,ket,m2,bra]
@@ -20,7 +23,7 @@ function ising_local_MPO(::Type{T}, shift::Float64=0.0; hz::Float64=1.0, hx::Flo
     MPOTensor{T}[h1, h2]
 end
 
-function ising_PBC_MPO(::Type{T}; hz::Float64=1.0, hx::Float64=0.0)::MPO_PBC_uniform{T} where {T}
+function ising_PBC_MPO(::Type{T}; hz::Real=1.0, hx::Real=0.0)::MPO_PBC_uniform{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
@@ -46,7 +49,7 @@ function ising_PBC_MPO(::Type{T}; hz::Float64=1.0, hx::Float64=0.0)::MPO_PBC_uni
     (hB, hM)
 end
 
-function ising_OBC_MPO(::Type{T}; hz::Float64=1.0, hx::Float64=0.0)::MPO_open_uniform{T} where {T}
+function ising_OBC_MPO(::Type{T}; hz::Real=1.0, hx::Real=0.0)::MPO_open_uniform{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
@@ -76,7 +79,7 @@ function ising_OBC_MPO(::Type{T}; hz::Float64=1.0, hx::Float64=0.0)::MPO_open_un
     (hL, hM, hR)
 end
 
-function ising_PBC_MPO_split(::Type{T}; hz::Float64=1.0, hx::Float64=0.0)::MPO_PBC_uniform_split{T} where {T}
+function ising_PBC_MPO_split(::Type{T}; hz::Real=1.0, hx::Real=0.0)::MPO_PBC_uniform_split{T} where {T}
     X = [0.0 1.0; 1.0 0.0]
     hL = reshape(-X, (2,2,1,1))
     hR = reshape(X, (2,2,1,1))
@@ -88,7 +91,7 @@ function ising_PBC_MPO_split(::Type{T}; hz::Float64=1.0, hx::Float64=0.0)::MPO_P
     (ising_OBC_MPO(T, hz=hz, hx=hx), h_B)
 end
 
-function ising_Hn_MPO_split(::Type{T}, n::Int, N::Int; hz::Float64=1.0, hx::Float64=0.0) where {T}
+function ising_Hn_MPO_split(::Type{T}, n::Integer, N::Integer; hz::Real=1.0, hx::Real=0.0) where {T}
     (hL, hM, hR), (hb1, hb2) = ising_PBC_MPO_split(T, hz=hz, hx=hx)
     
     hL[1,:,1,:] *= cis(n*2π/N)
@@ -96,7 +99,7 @@ function ising_Hn_MPO_split(::Type{T}, n::Int, N::Int; hz::Float64=1.0, hx::Floa
 
     hR[3,:,1,:] *= cis(n*N*2π/N) #I realise this is not strictly necessary, but it shows intent! :)
 
-    get_hM = (j::Int)->begin
+    get_hM = (j::Integer)->begin
         hM_j = copy(hM)
         hM_j[3,:,1,:] *= cis(n*j*2π/N)
         hM_j[3,:,2,:] *= cis(n*(j+0.5)*2π/N)
@@ -117,7 +120,7 @@ end
 """
 -(lamda*X1*X2 + delta1*X1*X3 + delta2*Z1*Z2 + hz*Z1)
 """
-function ANNNI_local_MPO(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta2::Float64=0.0, lambda::Float64=1.0)::MPO_open{T} where {T}
+function ANNNI_local_MPO(::Type{T}; hz::Real=1.0, delta1::Real=0.0, delta2::Real=0.0, lambda::Real=1.0)::MPO_open{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
@@ -147,7 +150,7 @@ function ANNNI_local_MPO(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta2
     MPOTensor{T}[h1, h2, h3]
 end
 
-function ANNNI_OBC_MPO(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta2::Float64=0.0, lambda::Float64=1.0)::MPO_open_uniform{T} where {T}
+function ANNNI_OBC_MPO(::Type{T}; hz::Real=1.0, delta1::Real=0.0, delta2::Real=0.0, lambda::Real=1.0)::MPO_open_uniform{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
@@ -181,7 +184,7 @@ function ANNNI_OBC_MPO(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta2::
     (hL, hM, hR)
 end
 
-function ANNNI_PBC_MPO_split(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, delta2::Float64=0.0, lambda::Float64=1.0)::MPO_PBC_uniform_split{T} where {T}
+function ANNNI_PBC_MPO_split(::Type{T}; hz::Real=1.0, delta1::Real=0.0, delta2::Real=0.0, lambda::Real=1.0)::MPO_PBC_uniform_split{T} where {T}
     #Turn off hz for boundary terms, since they're already in the OBC part.
     hL, hM, hR = ANNNI_OBC_MPO(T, hz=0.0, delta1=delta1, delta2=delta2, lambda=lambda)
     
@@ -196,7 +199,7 @@ function ANNNI_PBC_MPO_split(::Type{T}; hz::Float64=1.0, delta1::Float64=0.0, de
     (ANNNI_OBC_MPO(T, hz=hz, delta1=delta1, delta2=delta2, lambda=lambda), h_B)
 end
 
-function ANNNI_Hn_MPO_split(::Type{T}, n::Int, N::Int; hz::Float64=1.0, delta1::Float64=0.0, delta2::Float64=0.0, lambda::Float64=1.0) where {T}
+function ANNNI_Hn_MPO_split(::Type{T}, n::Integer, N::Integer; hz::Real=1.0, delta1::Real=0.0, delta2::Real=0.0, lambda::Real=1.0) where {T}
     (hL, hM, hR), (hb1, hb2, hb3, hb4) = ANNNI_PBC_MPO_split(T, hz=hz, delta1=delta1, delta2=delta2, lambda=lambda)
     
     Z = [1.0 0.0; 0.0 -1.0]
@@ -206,7 +209,7 @@ function ANNNI_Hn_MPO_split(::Type{T}, n::Int, N::Int; hz::Float64=1.0, delta1::
     hL[1,:,3,:] = -delta2 * cis(n*(1.5)*2π/N) * Z - hz * cis(n*2*2π/N) * I
     hL[1,:,4,:] *= cis(n*2*2π/N)
 
-    get_hM = (j::Int)->begin
+    get_hM = (j::Integer)->begin
         hM_j = copy(hM)
         hM_j[5,:,2,:] *= cis(n*(j+0.5)*2π/N)
         hM_j[5,:,3,:] = -delta2 * cis(n*(j+0.5)*2π/N) * Z - hz * cis(n*(j+1)*2π/N) * I
@@ -231,8 +234,8 @@ end
 
 #------------------------------
 
-function OBF_local_MPO(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0,
-                            lambdaC::Float64=0.0)::MPO_open{T} where {T}
+function OBF_local_MPO(::Type{T}; lambda1::Real=1.0, lambda2::Real=1.0,
+                            lambdaC::Real=0.0)::MPO_open{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
@@ -274,8 +277,8 @@ function OBF_local_MPO(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0,
     MPOTensor{T}[h1, h2, h3]
 end
 
-function OBF_OBC_MPO(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0,
-                        lambdaC::Float64=0.0)::MPO_open_uniform{T} where {T}
+function OBF_OBC_MPO(::Type{T}; lambda1::Real=1.0, lambda2::Real=1.0,
+                        lambdaC::Real=0.0)::MPO_open_uniform{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
@@ -317,8 +320,8 @@ function OBF_OBC_MPO(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0,
     (hL, hM, hR)
 end
 
-function OBF_PBC_MPO_split(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0,
-                                lambdaC::Float64=0.0)::MPO_PBC_uniform_split{T} where {T}
+function OBF_PBC_MPO_split(::Type{T}; lambda1::Real=1.0, lambda2::Real=1.0,
+                                lambdaC::Real=0.0)::MPO_PBC_uniform_split{T} where {T}
     hL, hM, hR = OBF_OBC_MPO(T, lambda1=lambda1, lambda2=lambda2, lambdaC=lambdaC)
     
     #Pick out only the needed terms from the OBC Hamiltonian. Reduces the max. bond dimension to 3.
@@ -333,7 +336,7 @@ function OBF_PBC_MPO_split(::Type{T}; lambda1::Float64=1.0, lambda2::Float64=1.0
 end
 
 
-function OBF_Hn_MPO_split(::Type{T}, n::Int, N::Int; lambda1::Float64=1.0, lambda2::Float64=1.0, 
+function OBF_Hn_MPO_split(::Type{T}, n::Integer, N::Integer; lambda1::Real=1.0, lambda2::Real=1.0, 
     ZZXoff::Number=5/4, XZZoff::Number=3/4) where {T}
     (hL, hM, hR), (hb1, hb2, hb3, hb4) = OBF_PBC_MPO_split(T, lambda1=lambda1, lambda2=lambda2)
     
@@ -345,7 +348,7 @@ function OBF_Hn_MPO_split(::Type{T}, n::Int, N::Int; lambda1::Float64=1.0, lambd
     #hL[1,:,4,:] *= cis(n*(1 + ZZXoff)*2π/N) #ZZX
     hL[1,:,5,:] *= cis(n*(1 + XZZoff)*2π/N) #XZZ
 
-    get_hM = (j::Int)->begin
+    get_hM = (j::Integer)->begin
         hM_j = copy(hM)
         hM_j[6,:,1,:] *= cis(n*j*2π/N)
         hM_j[6,:,3,:] *= cis(n*(j+0.5)*2π/N)
@@ -377,7 +380,7 @@ end
 
 #------------------------------
 
-function weylops(p::Int)
+function weylops(p::Integer)
     om = cis(2π / p)
     U = diagm(ComplexF64[om^j for j in 0:p-1])
     V = diagm(ones(p - 1), 1)
@@ -385,7 +388,7 @@ function weylops(p::Int)
     U, V, om
 end
 
-function potts3_OBC_MPO(::Type{T}; h::Float64=1.0) where {T}
+function potts3_OBC_MPO(::Type{T}; h::Real=1.0) where {T}
     E = Matrix{ComplexF64}(I,3,3)
     U, V, om = weylops(3)
     
@@ -416,13 +419,13 @@ function potts3_OBC_MPO(::Type{T}; h::Float64=1.0) where {T}
     (hL, hM, hR)
 end
 
-function potts3_local_MPO(::Type{T}; h::Float64=1.0) where {T}
+function potts3_local_MPO(::Type{T}; h::Real=1.0) where {T}
     hL, hM, hR = potts3_OBC_MPO(T, h=h)
     
     MPOTensor{T}[hL[:,:,1:3,:], hR[1:3,:,:,:]]
 end
 
-function potts3_PBC_MPO_split(::Type{T}; h::Float64=1.0)::MPO_PBC_uniform_split{T} where {T}
+function potts3_PBC_MPO_split(::Type{T}; h::Real=1.0)::MPO_PBC_uniform_split{T} where {T}
     hL, hM, hR = potts3_OBC_MPO(T, h=h)
     
     h_B = MPOTensor{T}[hL[:,:,2:3,:], hR[2:3,:,:,:]]
@@ -430,7 +433,7 @@ function potts3_PBC_MPO_split(::Type{T}; h::Float64=1.0)::MPO_PBC_uniform_split{
     ((hL, hM, hR), h_B)
 end
 
-function potts3_Hn_MPO_split(::Type{T}, n::Int, N::Int; h::Float64=1.0) where {T}
+function potts3_Hn_MPO_split(::Type{T}, n::Integer, N::Integer; h::Real=1.0) where {T}
     (hL, hM, hR), (hb1, hb2) = potts3_PBC_MPO_split(T, h=h)
     
     hL[1,:,1,:] *= cis(n*2π/N)
@@ -439,7 +442,7 @@ function potts3_Hn_MPO_split(::Type{T}, n::Int, N::Int; h::Float64=1.0) where {T
 
     hR[4,:,1,:] *= cis(n*N*2π/N)
 
-    get_hM = (j::Int)->begin
+    get_hM = (j::Integer)->begin
         hM_j = copy(hM)
         hM_j[4,:,1,:] *= cis(n*j*2π/N)
         hM_j[4,:,2,:] *= cis(n*(j+0.5)*2π/N)

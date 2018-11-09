@@ -297,12 +297,12 @@ end
 
 
 """
-    tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}, L::Int=1) where {T}
+    tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}, L::Integer=1) where {T}
 
 Computes the physical metric induced on the tangent space of the puMPState `M` for the tangent-space
 momentum sectors specified in `ks`. The momenta are `ps = 2π/N .* ks` where `N = num_sites(M)`.
 """
-function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}, L::Int=1) where {T}
+function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vector{MPS_MPO_TM{T}}, L::Integer=1) where {T}
     #Time cost O(N*d^2*D^6).. could save a factor of dD by implementing the sparse mat-vec operation, but then we'd add a factor Nitr
     #space cost O(N)
     A = mps_tensor(M)
@@ -498,7 +498,7 @@ end
 
 #This will return the transfer matrix (TM) from site nL to site nR, given a boundary Hamiltonian centred at the
 #boundary between sites N and 1.
-function blockTM_MPO_boundary(M::puMPState{T}, op_b::MPO_open{T}, blkTMs::Vector{MPS_MPO_TM{T}}, nL::Int, nR::Int) where {T}
+function blockTM_MPO_boundary(M::puMPState{T}, op_b::MPO_open{T}, blkTMs::Vector{MPS_MPO_TM{T}}, nL::Integer, nR::Integer) where {T}
     A = mps_tensor(M)
     N = num_sites(M)
     Nop = length(op_b)
@@ -552,7 +552,7 @@ end
 
 #This will return the boundary MPO tensor for site n. Where the MPO does not act on site n,
 #return a zero-length result.
-function op_term_MPO_boundary(M::puMPState{T}, op_b::MPO_open{T}, n::Int) where {T}
+function op_term_MPO_boundary(M::puMPState{T}, op_b::MPO_open{T}, n::Integer) where {T}
     A = mps_tensor(M)
     N = num_sites(M)
     Nop = length(op_b)
@@ -804,7 +804,7 @@ function tspace_ops_to_center_gauge!(ops::Vector{Array{T,6}}, lambda_i::Matrix{T
 end
 
 """
-    excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Int}; pinv_tol::Real=1e-10) where {T}
+    excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Integer}; pinv_tol::Real=1e-10) where {T}
 
 Computes eigenstates of the effective Hamiltonian obtained by projecting `H` onto the tangent space of the puMPState `M`.
 This is done in the momentum sectors specified in `ks`, where each entry of `k = ks[j]` specified a momentum `k*2pi/N`,
@@ -814,7 +814,7 @@ The number of eigenstates to be computed for each momentum sector is specified i
 
 The function returns a list of energies, a list of momenta (entries of `ks`), and a list of normalized tangent vectors.
 """
-function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Int}; pinv_tol::Real=1e-10) where {T}
+function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Integer}; pinv_tol::Real=1e-10) where {T}
     M, lambda, lambda_i = canonicalize_left!(M)
     lambda_i = Matrix(lambda_i)
 
@@ -826,7 +826,7 @@ function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_unif
 end
 
 function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Array{T,6}}, lambda_i::Matrix{T},
-                        ks::Vector{Tk}, num_states::Vector{Int}; pinv_tol::Real=1e-12) where {T,Tk<:Real}
+                        ks::Vector{Tk}, num_states::Vector{Integer}; pinv_tol::Real=1e-12) where {T,Tk<:Real}
     D = bond_dim(M)
     d = phys_dim(M)
     Bshp = mps_tensor_shape(d, D)
@@ -869,13 +869,13 @@ function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Arra
 end
 
 """
-    Hn_in_basis(M::puMPState{T}, Hn_split::Tuple{Int, MPO_PBC_split{T}}, Tvec_basis::Vector{puMPSTvec{T}}, ks::Vector{<:Real}) where {T}
+    Hn_in_basis(M::puMPState{T}, Hn_split::Tuple{Integer, MPO_PBC_split{T}}, Tvec_basis::Vector{puMPSTvec{T}}, ks::Vector{<:Real}) where {T}
 
 Given an MPO representation of a Hamiltonian Fourier mode, split into a large OBC MPO and a boundary
 MPO, `Hn_split`, computes its matrix elements in the basis of puMPState tangent vectors `Tvec_basis`
 which are assumed to live in the tangent space of the puMPState `M`.
 """
-function Hn_in_basis(M::puMPState{T}, Hn_split::Tuple{Int, MPO_PBC_split{T}}, Tvec_basis::Vector{puMPSTvec{T}}, ks::Vector{<:Real}) where {T}
+function Hn_in_basis(M::puMPState{T}, Hn_split::Tuple{Integer, MPO_PBC_split{T}}, Tvec_basis::Vector{puMPSTvec{T}}, ks::Vector{<:Real}) where {T}
     #Hn is a Fourier mode of the Hamiltonian density with "momentum" n * 2pi/N
     #Each entry in ks, times 2pi/N is the momentum of one of the excitations (the ket).
     #Due to the way tangent_space_MPO() works, the momentum of the other excitation is automatically (ks[j] + n) * 2pi/N.
