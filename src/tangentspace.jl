@@ -9,6 +9,7 @@ mutable struct puMPSTvec{T}
 end
 
 Base.copy(Tvec::puMPSTvec) = puMPSTvec(Tvec.state, copy(Tvec.B), Tvec.k, Tvec.N) #does not copy state
+Base.eltype(Tvec::puMPSTvec{T}) where {T} = T
 
 MPS.bond_dim(Tvec::puMPSTvec) = bond_dim(Tvec.state)
 MPS.phys_dim(Tvec::puMPSTvec) = phys_dim(Tvec.state)
@@ -804,7 +805,7 @@ function tspace_ops_to_center_gauge!(ops::Vector{Array{T,6}}, lambda_i::Matrix{T
 end
 
 """
-    excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Integer}; pinv_tol::Real=1e-10) where {T}
+    excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::AbstractVector{<:Real}, num_states::AbstractVector{<:Integer}; pinv_tol::Real=1e-10) where {T}
 
 Computes eigenstates of the effective Hamiltonian obtained by projecting `H` onto the tangent space of the puMPState `M`.
 This is done in the momentum sectors specified in `ks`, where each entry of `k = ks[j]` specified a momentum `k*2pi/N`,
@@ -814,7 +815,7 @@ The number of eigenstates to be computed for each momentum sector is specified i
 
 The function returns a list of energies, a list of momenta (entries of `ks`), and a list of normalized tangent vectors.
 """
-function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::Vector{<:Real}, num_states::Vector{Integer}; pinv_tol::Real=1e-10) where {T}
+function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::AbstractVector{<:Real}, num_states::AbstractVector{<:Integer}; pinv_tol::Real=1e-10) where {T}
     M, lambda, lambda_i = canonicalize_left!(M)
     lambda_i = Matrix(lambda_i)
 
@@ -826,7 +827,7 @@ function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_unif
 end
 
 function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Array{T,6}}, lambda_i::Matrix{T},
-                        ks::Vector{Tk}, num_states::Vector{Integer}; pinv_tol::Real=1e-12) where {T,Tk<:Real}
+                        ks::Vector{Tk}, num_states::Vector{<:Integer}; pinv_tol::Real=1e-12) where {T,Tk<:Real}
     D = bond_dim(M)
     d = phys_dim(M)
     Bshp = mps_tensor_shape(d, D)
