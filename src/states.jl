@@ -168,6 +168,32 @@ function LinearAlgebra.normalize!(M::puMPState{T}, blkTMs::Vector{MPS_MPO_TM{T}}
 end
 
 """
+    LinearAlgebra.dot(M::puMPState, psi::AbstractVector)
+
+Computes the inner product of a puMPState with a state vector (dense representation).
+"""
+function LinearAlgebra.dot(M::puMPState, psi::AbstractVector)
+    N = num_sites(M)
+    D = bond_dim(M)
+    d = phys_dim(M)
+    length(psi) == d^N || DimensionMismatch("")
+
+    A = mps_tensor(M)
+
+    psi_r = reshape(psi, (d, d^(N-1)))
+    @tensor con[r,phys,l] := conj(A[l,p1,r]) * psi_r[p1,phys]
+    for n=2:N
+        con = reshape(con, (D, d, d^(N-n), D)) #r,p1,phys,l
+        @tensor con[r,phys,l] := conj(A[li,p1,r]) * con[li,p1,phys,l]
+    end
+    con = reshape(con, (D,D))
+
+    tr(con)
+end
+
+LinearAlgebra.dot(psi::AbstractVector, M::puMPState) = conj(dot(M, psi))
+
+"""
     expect_nn(M::puMPState{Ts}, op::Array{Top,4}; MPS_is_normalized::Bool=true, blkTMs::Vector{MPS_MPO_TM{Ts}}=MPS_MPO_TM{Ts}[]) where {Ts, Top}
 
 Computes the expectation value with respect to `M` of a nearest-neighbour operator,

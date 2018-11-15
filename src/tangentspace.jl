@@ -58,6 +58,44 @@ Normalizes a puMPState tangent vector `Tvec` in place.
 LinearAlgebra.normalize!(Tvec::puMPSTvec{T}) where {T} = rmul!(Tvec.B, 1.0/norm(Tvec))
 
 """
+    LinearAlgebra.dot(Tvec::puMPSTvec, psi::AbstractVector)
+
+Computes the inner product of a puMPSTvec with a state vector (dense representation).
+"""
+function LinearAlgebra.dot(Tvec::puMPSTvec, psi::AbstractVector)
+    N = num_sites(Tvec)
+    D = bond_dim(Tvec)
+    d = phys_dim(Tvec)
+    length(psi) == d^N || DimensionMismatch("")
+
+    A, B = mps_tensors(Tvec)
+    p = momentum(Tvec)
+
+    #Project psi into momentum sector of Tvec
+    psi_tmp = Vector{eltype(Tvec)}(undef, length(psi))
+    Ppsi = similar(psi_tmp)
+    copyto!(Ppsi, psi)
+    for n=1:N-1
+        psi_r = reshape(psi, (d^(n), d^(N-n)))
+        copyto!(psi_tmp, transpose(psi_r))
+        axpy!(cis(-n*p), psi_tmp, Ppsi)
+    end
+
+    Ppsi_r = reshape(Ppsi, (d, d^(N-1)))
+    @tensor con[r,phys,l] := conj(B[l,p1,r]) * Ppsi_r[p1,phys]
+    for n=2:N
+        con = reshape(con, (D, d, d^(N-n), D)) #r,p1,phys,l
+        @tensor con[r,phys,l] := conj(A[li,p1,r]) * con[li,p1,phys,l]
+    end
+    con = reshape(con, (D,D))
+
+    tr(con)
+end
+
+LinearAlgebra.dot(psi::AbstractVector, Tvec::puMPSTvec) = conj(dot(Tvec, psi))
+
+
+"""
     expect(Tvec::puMPSTvec{T}, O::MPO_PBC_uniform{T}) where {T}
 
 The expectation value of a translation-invariant operator specified as an MPO
