@@ -23,6 +23,42 @@ momentum(Tvec::puMPSTvec) = 2π/num_sites(Tvec) * spin(Tvec)
 set_tvec_tensor!(Tvec::puMPSTvec{T}, B::MPSTensor{T}) where {T} = Tvec.B = B
 
 """
+    Base.Vector(M::puMPState{T}) where T
+
+Computes the full (dense) state vector from the (compressed) puMPS form.
+Since puMPS typically represent state vectors that are far too big to fit
+in memory, this should only be used for very small systems!
+"""
+function Base.Vector(Tvec::puMPSTvec{T}) where T
+    N = num_sites(Tvec)
+    d = phys_dim(Tvec)
+    D = bond_dim(Tvec)
+    A, B = mps_tensors(Tvec)
+    p = momentum(Tvec)
+
+    N == 0 && return Vector{T}()
+
+    onlyAs = A
+    res = B * cis(p)
+    for j in 2:N
+        @tensor res[l,p1,p2,r] := res[l,p1,ri] * A[ri,p2,r]
+        Bp = B * cis(p*j)
+        @tensor res[l,p1,p2,r] += onlyAs[l,p1,ri] * Bp[ri,p2,r]
+        res = reshape(res, (D, d^j, D))
+        if j < N
+            @tensor onlyAs[l,p1,p2,r] := onlyAs[l,p1,ri] * A[ri,p2,r]
+            onlyAs = reshape(onlyAs, (D, d^j, D))
+        end
+    end
+    # res now has D^2 d^N elements!
+    # TODO: Break the system into two parts so that the largest
+    # object has max(D^2 * d^(N/2), d^N).
+    @tensor res[p] := res[v,p,v]
+
+    res
+end
+
+"""
     LinearAlgebra.norm(Tvec::puMPSTvec{T}) where {T}
 
 Computes the norm of a puMPState tangent vector `Tvec`.
@@ -75,10 +111,11 @@ function LinearAlgebra.dot(Tvec::puMPSTvec, psi::AbstractVector)
     psi_tmp = Vector{eltype(Tvec)}(undef, length(psi))
     Ppsi = similar(psi_tmp)
     copyto!(Ppsi, psi)
+    rmul!(Ppsi, cis(-p))
     for n=1:N-1
         psi_r = reshape(psi, (d^(n), d^(N-n)))
         copyto!(psi_tmp, transpose(psi_r))
-        axpy!(cis(-n*p), psi_tmp, Ppsi)
+        axpy!(cis(-(n+1)*p), psi_tmp, Ppsi)
     end
 
     Ppsi_r = reshape(Ppsi, (d, d^(N-1)))

@@ -50,6 +50,31 @@ num_sites(M::puMPState) = M.N
 set_mps_tensor!(M::puMPState{T}, A::MPSTensor{T}) where {T} = M.A = A
 
 """
+    Base.Vector(M::puMPState{T}) where T
+
+Computes the full (dense) state vector from the (compressed) puMPS form.
+Since puMPS typically represent state vectors that are far too big to fit
+in memory, this should only be used for very small systems!
+"""
+function Base.Vector(M::puMPState{T}) where T
+    N = num_sites(M)
+    d = phys_dim(M)
+    D = bond_dim(M)
+    A = mps_tensor(M)
+
+    N == 0 && return Vector{T}()
+
+    res = A
+    for j in 2:N
+        @tensor res[l,p1,p2,r] := res[l,p1,ri] * A[ri,p2,r]
+        res = reshape(res, (D, d^j, D))
+    end
+    @tensor res[p] := res[v,p,v]
+
+    res
+end
+
+"""
     canonicalize_left!(M::puMPState; pinv_tol::Real=1e-12)
 
 Modifies a puMPState in place via a gauge transformation to bring it into left-canonical form,
