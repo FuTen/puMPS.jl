@@ -4,7 +4,7 @@ module puMPS
 using LinearAlgebra
 using TensorOperations
 using LinearMaps
-using Arpack
+using KrylovKit
 using Optim
 
 include("MPS.jl")

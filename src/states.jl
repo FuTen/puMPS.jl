@@ -609,9 +609,16 @@ function vumps_local_gnd(X::Array{T,N}, Heff::Array{T,M}, Nmat::Array{T,M}, tol:
     @assert M == 2N
     Heff = reshape(Heff, (prod(size(Heff)[1:N]), prod(size(Heff)[N+1:2N])))
     Nmat = reshape(Nmat, (prod(size(Nmat)[1:N]), prod(size(Nmat)[N+1:2N])))
-    ev, eV, nconv, niter, nmult, resid = eigs(Heff, Nmat, nev=1, ncv=ncv, which=:SR, ritzvec=true, v0=vec(X), tol=tol)
+
+    # KrylovKit does not currently support generalized eigenvalue problems directly,
+    # so we do a full pseudo-inverse here at cost ~D^6 :(
+    # Could improve this for N_Ac by inverting the components individually!
+    @time Ninv = pinv(Nmat, tol)
+    @time ev, eV, info = eigsolve(Ninv*Heff, vec(X), 1, :SR, tol=tol, krylovdim=ncv)
+    info.converged == 0 && @warn "Eigenvector did not converge after $(info.numiter) iterations."
+
     @show ev
-    reshape(eV[:,1], size(X))
+    reshape(eV[1], size(X))
 end
 
 function vumps_update_state(Ac::MPSTensor{T}, C::Matrix{T}) where {T}

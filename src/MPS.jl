@@ -4,7 +4,7 @@ module MPS
 using LinearAlgebra
 using TensorOperations
 using LinearMaps
-using Arpack
+using KrylovKit
 
 export MPSTensor, bond_dim, bond_dim_L, bond_dim_R, phys_dim, mps_tensor, mps_tensor_shape, 
        rand_MPSTensor_unitary, rand_MPSTensor,
@@ -323,12 +323,13 @@ function tm_eigs_sparse(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::Int
     
     fmap = LinearMap{T}(f, D*DB)
     
-    ev, eV, nconv, niter, nmult, resid = eigs(fmap, nev=nev, which=:LM, ritzvec=true, v0=vec(x0))
+    ev, eV, info = eigsolve(f, vec(x0), nev, :LM)
+    info.converged < nev && @warn "$(nev - info.converged) eigenvectors did not converge after $(info.numiter) iterations."
 
     dirn == :L && conj!(ev)
     
     #Reshape eigenvectors to (D,DB) matrices
-    eVm = Matrix[reshape(eV[:,j], (D,DB)) for j in 1:size(eV, 2)]
+    eVm = Matrix[reshape(eV[j], (D,DB)) for j in 1:length(eV)]
     
     ev, eVm
 end

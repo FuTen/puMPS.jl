@@ -905,6 +905,7 @@ function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Arra
                         ks::Vector{Tk}, num_states::Vector{<:Integer}; pinv_tol::Real=1e-12) where {T,Tk<:Real}
     D = bond_dim(M)
     d = phys_dim(M)
+    A = mps_tensor(M)
     Bshp = mps_tensor_shape(d, D)
     par_dim = prod(Bshp)
 
@@ -920,14 +921,14 @@ function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Arra
         G = (G + G') / 2
         Heff = (Heff + Heff') / 2
 
+        # A dense pinv seems to avoid problems with spurious near-zero eigenvalues
         @time GiH = pinv(G, pinv_tol) * Heff
 
-        @time ev, eV = eigs(GiH, nev=num_states[j])
-        #@time ev, eV = eigs(Heff, G, nev=num_states[j]) #this does not deal with small eigenvalues well
+        @time ev, eV, info = eigsolve(GiH, vec(A), num_states[j], :LM)
+        info.converged < num_states[j] && @warn "$(num_states[j] - info.converged) eigenvectors did not converge after $(info.numiter) iterations."
 
         exs_k = puMPSTvec{T}[]
-        @time for i in 1:size(eV,2)
-            v = view(eV, :,i)
+        @time for v in eV
             Bnrm = sqrt(dot(v, G * v)) #We can use G to compute the norm
             rmul!(v, 1.0/Bnrm)
             Bc_mat = reshape(v, (D*d, D))
