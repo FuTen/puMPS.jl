@@ -116,6 +116,32 @@ function ising_Hn_MPO_split(::Type{T}, n::Integer, N::Integer; hz::Real=1.0, hx:
 end
 
 #------------------------------
+function heis_local_MPO(::Type{T}; J::Number=1, spin::Real=1//2)::MPO_open{T} where {T}
+    if spin == 1//2
+        E = Matrix{ComplexF64}(I,2,2)
+        X = complex([0.0 1.0; 1.0 0.0])
+        Y = 1.0im*[0.0 -1.0; 1.0 0.0]
+        Z = complex([1.0 0.0; 0.0 -1.0])
+        zer = zero(E)
+    else
+        ValueError()
+    end
+
+    h1 = J*[X Y Z]
+    h2 = [X;
+          Y;
+          Z]
+
+    h1 = reshape(h1, (2,1,2,3))
+    h2 = reshape(h2, (2,3,2,1))
+
+    h1 = permutedims(h1, (2,3,4,1))
+    h2 = permutedims(h2, (2,3,4,1))
+
+    MPOTensor{T}[convert(MPOTensor{T}, h1), convert(MPOTensor{T}, h2)]
+end
+
+#------------------------------
 
 """
 -(lamda*X1*X2 + delta1*X1*X3 + delta2*Z1*Z2 + hz*Z1)

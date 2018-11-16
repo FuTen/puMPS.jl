@@ -27,6 +27,7 @@ export puMPSTvec, tvec_tensor, momentum, mps_tensors, excitations!, excitations,
 include("tangentspace.jl")
 
 export ising_local_MPO, ising_PBC_MPO, ising_PBC_MPO_split, ising_OBC_MPO, ising_Hn_MPO_split,
+       heis_local_MPO,
        ANNNI_local_MPO, ANNNI_OBC_MPO, ANNNI_PBC_MPO_split, ANNNI_Hn_MPO_split,
        OBF_local_MPO, OBF_OBC_MPO, OBF_PBC_MPO_split, OBF_Hn_MPO_split,
        potts3_local_MPO, potts3_OBC_MPO, potts3_PBC_MPO_split, potts3_Hn_MPO_split
