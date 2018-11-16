@@ -1,5 +1,5 @@
 julia 0.7
 TensorOperations 0.7
 LinearMaps 2.1
-Arpack 0.3
+KrylovKit 0.1
 Optim 0.17
