@@ -23,12 +23,12 @@ function ising_local_MPO(::Type{T}, shift::Number=0.0; hz::Number=1.0, hx::Numbe
     MPOTensor{T}[h1, h2]
 end
 
-function ising_PBC_MPO(::Type{T}; hz::Number=1.0, hx::Number=0.0)::MPO_PBC_uniform{T} where {T}
+function ising_PBC_MPO(::Type{T}; shift::Number=0.0, hz::Number=1.0, hx::Number=0.0)::MPO_PBC_uniform{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
 
-    h1_11 = -hz*Z - hx*X
+    h1_11 = -hz*Z - hx*X + shift*I
 
     hM = zeros(eltype(h1_11), 2,2,3,3)
     hB = zeros(eltype(h1_11), 2,2,3,3)
@@ -51,12 +51,12 @@ function ising_PBC_MPO(::Type{T}; hz::Number=1.0, hx::Number=0.0)::MPO_PBC_unifo
     (hB, hM)
 end
 
-function ising_OBC_MPO(::Type{T}; hz::Number=1.0, hx::Number=0.0)::MPO_open_uniform{T} where {T}
+function ising_OBC_MPO(::Type{T}; shift::Number=0.0, hz::Number=1.0, hx::Number=0.0)::MPO_open_uniform{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
 
-    h1_11 = -hz*Z - hx*X
+    h1_11 = -hz*Z - hx*X + shift*I
 
     hM = zeros(eltype(h1_11), 2,2,3,3)
     
@@ -83,7 +83,7 @@ function ising_OBC_MPO(::Type{T}; hz::Number=1.0, hx::Number=0.0)::MPO_open_unif
     (hL, hM, hR)
 end
 
-function ising_PBC_MPO_split(::Type{T}; hz::Number=1.0, hx::Number=0.0)::MPO_PBC_uniform_split{T} where {T}
+function ising_PBC_MPO_split(::Type{T}; shift::Number=0.0, hz::Number=1.0, hx::Number=0.0)::MPO_PBC_uniform_split{T} where {T}
     X = [0.0 1.0; 1.0 0.0]
     hL = reshape(-X, (2,2,1,1))
     hR = reshape(X, (2,2,1,1))
@@ -92,7 +92,7 @@ function ising_PBC_MPO_split(::Type{T}; hz::Number=1.0, hx::Number=0.0)::MPO_PBC
     
     h_B = MPOTensor{T}[hL, hR]
     
-    (ising_OBC_MPO(T, hz=hz, hx=hx), h_B)
+    (ising_OBC_MPO(T, shift=shift, hz=hz, hx=hx), h_B)
 end
 
 function ising_Hn_MPO_split(::Type{T}, n::Integer, N::Integer; hz::Number=1.0, hx::Number=0.0) where {T}
