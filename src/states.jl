@@ -656,8 +656,8 @@ function vumps_opt!(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Integ
         
         blkTMs = blockTMs(M)
         En_prev = En
-        En = real(expect(M, hMPO, blkTMs=blkTMs))
-        Heff_Al = eff_Ham_1s(M, hMPO, blkTMs=blkTMs, e0=En)
+        En = expect(M, hMPO, blkTMs=blkTMs)
+        Heff_Al = eff_Ham_1s(M, hMPO, blkTMs=blkTMs, e0=real(En))
         Heff_Ac, N_Ac, Heff_C, N_C = eff_Hams_Ac_C(M, Ci, Heff_Al, blkTMs[N-1])
 
         @tensor Ac_grad[V1,P,V2] := Heff_Ac[V1,P,V2, v1,p,v2] * Ac[v1,p,v2]
@@ -977,14 +977,17 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
         stol = min(1e-6, max(norm_grad^2/10, 1e-12))
         En_prev = En
 
-        if !fixed_step
+        if fixed_step
+            Anew = mps_tensor(M) .- real(T)(step) .* grad
+            En = expect(M_new, hMPO, MPS_is_normalized=false)
+        else
             step_corr = min(max(step, 0.001),0.1)
             step, En = line_search_energy(M, En, grad, norm_grad^2, step_corr, hMPO)
+            Anew = mps_tensor(M) .- real(T)(step) .* grad
         end
         
         println("$k, $norm_grad, $step, $En, $(En-En_prev)")
 
-        Anew = mps_tensor(M) .- real(T)(step) .* grad
         set_mps_tensor!(M, Anew)
         normalize!(M)
     end
