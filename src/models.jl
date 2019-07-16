@@ -23,17 +23,19 @@ function ising_local_MPO(::Type{T}, shift::Number=0.0; hz::Number=1.0, hx::Numbe
     MPOTensor{T}[h1, h2]
 end
 
-function ising_PBC_MPO(::Type{T}; hz::Real=1.0, hx::Real=0.0)::MPO_PBC_uniform{T} where {T}
+function ising_PBC_MPO(::Type{T}; hz::Number=1.0, hx::Number=0.0)::MPO_PBC_uniform{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
-    
-    hM = zeros(Float64, 2,2,3,3)
-    hB = zeros(Float64, 2,2,3,3)
+
+    h1_11 = -hz*Z - hx*X
+
+    hM = zeros(eltype(h1_11), 2,2,3,3)
+    hB = zeros(eltype(h1_11), 2,2,3,3)
     
     hM[:,:,1,1] = E
     hM[:,:,2,1] = X
-    hM[:,:,3,1] = -hz*Z - hx*X
+    hM[:,:,3,1] = h1_11
     hM[:,:,3,2] = -X
     hM[:,:,3,3] = E
     
@@ -49,21 +51,23 @@ function ising_PBC_MPO(::Type{T}; hz::Real=1.0, hx::Real=0.0)::MPO_PBC_uniform{T
     (hB, hM)
 end
 
-function ising_OBC_MPO(::Type{T}; hz::Real=1.0, hx::Real=0.0)::MPO_open_uniform{T} where {T}
+function ising_OBC_MPO(::Type{T}; hz::Number=1.0, hx::Number=0.0)::MPO_open_uniform{T} where {T}
     E = Matrix{Float64}(I,2,2)
     X = [0.0 1.0; 1.0 0.0]
     Z = [1.0 0.0; 0.0 -1.0]
-    
-    hM = zeros(Float64, 2,2,3,3)
+
+    h1_11 = -hz*Z - hx*X
+
+    hM = zeros(eltype(h1_11), 2,2,3,3)
     
     hM[:,:,1,1] = E
     hM[:,:,2,1] = X
-    hM[:,:,3,1] = -hz*Z - hx*X
+    hM[:,:,3,1] = h1_11
     hM[:,:,3,2] = -X
     hM[:,:,3,3] = E
     
-    hL = zeros(Float64, 2,2,1,3)
-    hR = zeros(Float64, 2,2,3,1)
+    hL = zeros(eltype(h1_11), 2,2,1,3)
+    hR = zeros(eltype(h1_11), 2,2,3,1)
     
     hL[:,:,1,:] = hM[:,:,3,:]
     hR[:,:,:,1] = hM[:,:,:,1]
@@ -79,7 +83,7 @@ function ising_OBC_MPO(::Type{T}; hz::Real=1.0, hx::Real=0.0)::MPO_open_uniform{
     (hL, hM, hR)
 end
 
-function ising_PBC_MPO_split(::Type{T}; hz::Real=1.0, hx::Real=0.0)::MPO_PBC_uniform_split{T} where {T}
+function ising_PBC_MPO_split(::Type{T}; hz::Number=1.0, hx::Number=0.0)::MPO_PBC_uniform_split{T} where {T}
     X = [0.0 1.0; 1.0 0.0]
     hL = reshape(-X, (2,2,1,1))
     hR = reshape(X, (2,2,1,1))
@@ -91,7 +95,7 @@ function ising_PBC_MPO_split(::Type{T}; hz::Real=1.0, hx::Real=0.0)::MPO_PBC_uni
     (ising_OBC_MPO(T, hz=hz, hx=hx), h_B)
 end
 
-function ising_Hn_MPO_split(::Type{T}, n::Integer, N::Integer; hz::Real=1.0, hx::Real=0.0) where {T}
+function ising_Hn_MPO_split(::Type{T}, n::Integer, N::Integer; hz::Number=1.0, hx::Number=0.0) where {T}
     (hL, hM, hR), (hb1, hb2) = ising_PBC_MPO_split(T, hz=hz, hx=hx)
     
     hL[1,:,1,:] *= cis(n*2π/N)
