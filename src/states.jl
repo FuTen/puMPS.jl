@@ -979,17 +979,18 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
 
         if fixed_step
             Anew = mps_tensor(M) .- real(T)(step) .* grad
-            En = expect(M_new, hMPO, MPS_is_normalized=false)
+            set_mps_tensor!(M, Anew)
+            normalize!(M)
+            En = expect(M, hMPO, MPS_is_normalized=true)
         else
             step_corr = min(max(step, 0.001),0.1)
             step, En = line_search_energy(M, En, grad, norm_grad^2, step_corr, hMPO)
             Anew = mps_tensor(M) .- real(T)(step) .* grad
+            set_mps_tensor!(M, Anew)
+            normalize!(M)
         end
         
         println("$k, $norm_grad, $step, $En, $(En-En_prev)")
-
-        set_mps_tensor!(M, Anew)
-        normalize!(M)
     end
     
     normalize!(M)
