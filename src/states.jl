@@ -446,7 +446,8 @@ function MPS.applyTM_MPO_r(M::puMPState{T}, O::MPO_open{T}, TM2::MPS_MPO_TM{T};
 end
 
 """
-    derivatives_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Real=0.0) where {T}
+    derivatives_1s(M::puMPState{T}, h::MPO_open{T};
+        blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Number=0.0) where {T}
 
 This returns the energy derivatives with respect to the elements of the conjugate `conj(A)` of one
 tensor of the MPS `M`. This the same as the result of applying the effective Hamiltonian for one 
@@ -461,12 +462,13 @@ of the state: The Hamiltonian `H` becomes `H - e0 * I`.
 
 Pre-computed powers of the transfer matrix may be supplied as `blkTMs` to avoid recomputing them.
 """
-function derivatives_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Real=0.0) where {T}
+function derivatives_1s(M::puMPState{T}, h::MPO_open{T};
+    blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Number=0.0) where {T}
     A = mps_tensor(M)
     N = num_sites(M)
     D = bond_dim(M)
     
-    e0 = real(T)(e0) #will be used for scaling, so need it in the working precision
+    e0 = T(e0) #will be used for scaling, so need it in the working precision
 
     j = 1
     TM = blkTMs[j]
@@ -500,7 +502,7 @@ function derivatives_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_
         j += 1
         TM = blkTMs[j]
         
-        axpy!(real(T)(1.0), TM_H_add, TM_H) #add new H term to TM_H
+        axpy!(one(T), TM_H_add, TM_H) #add new H term to TM_H
     end
     
     #effective ham terms that do not act on gradient site
