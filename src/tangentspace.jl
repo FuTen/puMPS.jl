@@ -890,7 +890,8 @@ The number of eigenstates to be computed for each momentum sector is specified i
 
 The function returns a list of energies, a list of momenta (entries of `ks`), and a list of normalized tangent vectors.
 """
-function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::AbstractVector{<:Real}, num_states::AbstractVector{<:Integer}; pinv_tol::Real=1e-10) where {T}
+function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_uniform_split{T}}, ks::AbstractVector{<:Real}, num_states::AbstractVector{<:Integer};
+    pinv_tol::Real=1e-10, hermitian::Bool=true) where {T}
     M, lambda, lambda_i = canonicalize_left!(M)
     lambda_i = Matrix(lambda_i)
 
@@ -898,11 +899,13 @@ function excitations!(M::puMPState{T}, H::Union{MPO_PBC_uniform{T}, MPO_PBC_unif
     tspace_ops_to_center_gauge!(Gs, lambda_i)
     tspace_ops_to_center_gauge!(Heffs, lambda_i)
 
-    excitations(M, Gs, Heffs, lambda_i, ks, num_states, pinv_tol=pinv_tol)
+    excitations(M, Gs, Heffs, lambda_i, ks, num_states, pinv_tol=pinv_tol, hermitian=hermitian)
 end
 
 function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Array{T,6}}, lambda_i::Matrix{T},
-                        ks::Vector{Tk}, num_states::Vector{<:Integer}; pinv_tol::Real=1e-12) where {T,Tk<:Real}
+                        ks::Vector{Tk}, num_states::Vector{<:Integer};
+                        pinv_tol::Real=1e-12,
+                        hermitian::Bool=true) where {T,Tk<:Real}
     D = bond_dim(M)
     d = phys_dim(M)
     A = mps_tensor(M)
@@ -917,9 +920,11 @@ function excitations(M::puMPState{T}, Gs::Vector{Array{T,6}}, Heffs::Vector{Arra
         G = reshape(Gs[j], (par_dim, par_dim))
         Heff = reshape(Heffs[j], (par_dim, par_dim))
 
-        #Force Hermiticity
-        G = (G + G') / 2
-        Heff = (Heff + Heff') / 2
+        if hermitian
+            #Force Hermiticity
+            G = (G + G') / 2
+            Heff = (Heff + Heff') / 2
+        end
 
         # A dense pinv seems to avoid problems with spurious near-zero eigenvalues
         @time GiH = pinv(G, pinv_tol) * Heff
