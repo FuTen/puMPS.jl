@@ -904,7 +904,7 @@ function line_search_energy(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad
             if isa(e, EnergyHighException)
                 if attempt < max_attempts
                     @warn "Linesearch: Initial step was too large. Adjusting!"
-                    step *= 0.1
+                    step *= 0.8
                     num_calls = 0
                 else
                     @warn "Linesearch: Initial step was too large. Aborting!"
@@ -942,6 +942,7 @@ For a nearest-neighbour Hamiltonian, `n=2`.
 function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Integer;
         tol::Real=1e-6,
         step::Real=0.001,
+        fixed_step::Bool=false,
         grad_max_itr::Integer=500,
         grad_sparse_inverse::Bool=false,
         use_phys_grad::Bool=true) where {T}
@@ -976,8 +977,10 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
         stol = min(1e-6, max(norm_grad^2/10, 1e-12))
         En_prev = En
 
-        step_corr = min(max(step, 0.001),0.1)
-        step, En = line_search_energy(M, En, grad, norm_grad^2, step_corr, hMPO)
+        if !fixed_step
+            step_corr = min(max(step, 0.001),0.1)
+            step, En = line_search_energy(M, En, grad, norm_grad^2, step_corr, hMPO)
+        end
         
         println("$k, $norm_grad, $step, $En, $(En-En_prev)")
 
