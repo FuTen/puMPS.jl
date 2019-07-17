@@ -944,10 +944,14 @@ For a nearest-neighbour Hamiltonian, `n=2`.
 function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Integer;
         tol::Real=1e-6,
         step::Real=0.001,
-        fixed_step::Bool=false,
+        step_control::Symbol=:gradientdescent,
         grad_max_itr::Integer=500,
         grad_sparse_inverse::Bool=false,
         use_phys_grad::Bool=true) where {T}
+    if !(step_control in (:gradientdescent, :fixed, :auto))
+        @error "Invalid step_control argument: $(step_control)"
+    end
+
     blkTMs = blockTMs(M)
     normalize!(M, blkTMs)
     En = real(expect(M, hMPO, blkTMs=blkTMs))
@@ -979,17 +983,26 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
         stol = min(1e-6, max(norm_grad^2/10, 1e-12))
         En_prev = En
 
-        if fixed_step
-            Anew = mps_tensor(M) .- real(T)(step) .* grad
-            set_mps_tensor!(M, Anew)
-            normalize!(M)
-            En = expect(M, hMPO, MPS_is_normalized=true)
-        else
+        if step_control == :gradientdescent
             step_corr = min(max(step, 0.001),0.1)
             step, En = line_search_energy(M, En, grad, norm_grad^2, step_corr, hMPO)
             Anew = mps_tensor(M) .- real(T)(step) .* grad
             set_mps_tensor!(M, Anew)
             normalize!(M)
+        else
+            Anew = mps_tensor(M) .- real(T)(step) .* grad
+            set_mps_tensor!(M, Anew)
+            normalize!(M)
+            En = expect(M, hMPO, MPS_is_normalized=true)
+            if step_control == :auto
+                dE_prediction = norm_grad^2 * 2 * abs(step) * num_sites(M)
+                dE = abs(En - En_prev)
+                if dE > dE_prediction * 10
+                    step = max(step * 0.8, 0.001)
+                elseif dE < dE_prediction * 0.1
+                    step = min(step * 1.1, 0.1)
+                end
+            end
         end
         
         println("$k, $norm_grad, $step, $En, $(En-En_prev)")
