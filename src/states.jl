@@ -867,7 +867,7 @@ Where they occur, they will typically be small compared to `step`.
 
 `hMPO` is the local Hamiltonian term in MPO form. It is used to compute the energy density.
 """
-function line_search_energy(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad_normsq::Real, step::Real, hMPO::MPO_open{T}; 
+function line_search_energy(M::puMPState{T}, En0::Number, grad::MPSTensor{T}, grad_normsq::Real, step::Real, hMPO::MPO_open{T};
         itr::Integer=10, rel_tol::Real=1e-1, max_attempts::Integer=3, wolfe_c1::Real=100.0
     ) where {T}
     M_new = copy(M)
@@ -879,16 +879,16 @@ function line_search_energy(M::puMPState{T}, En0::Real, grad::MPSTensor{T}, grad
         
         set_mps_tensor!(M_new, mps_tensor(M) .- real(T)(stp) .* grad)
         
-        En = real(expect(M_new, hMPO, MPS_is_normalized=false)) #computes the norm and energy-density in one step
+        En = expect(M_new, hMPO, MPS_is_normalized=false) #computes the norm and energy-density in one step
         
         #println("Linesearch: $stp, $En")
 
         #Abort the search if the first step already increases the energy compared to the initial state
-        num_calls == 1 && En > En0 && throw(EnergyHighException{Float64}(stp, Float64(En)))
+        num_calls == 1 && real(En) > real(En0) && throw(EnergyHighException{T}(stp, En))
         
         #Note: This is the first Wolfe condition, plus a minimum step size, since we don't want to compute the gradient...
         #Probably it effectively only serves to reduce the maximum step size reached, thus we turn it off by setting wolfe_c1=100.
-        stp > 1e-2 && En <= En0 - wolfe_c1 * stp * grad_normsq && throw(WolfeAbortException{Float64}(stp, En))
+        stp > 1e-2 && real(En) <= real(En0) - wolfe_c1 * stp * grad_normsq && throw(WolfeAbortException{T}(stp, En))
         
         En
     end
@@ -945,6 +945,7 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
         tol::Real=1e-6,
         step::Real=0.001,
         step_control::Symbol=:gradientdescent,
+        hermitian::Bool=true,
         grad_max_itr::Integer=500,
         grad_sparse_inverse::Bool=false,
         use_phys_grad::Bool=true) where {T}
@@ -995,8 +996,11 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
             normalize!(M)
             En = expect(M, hMPO, MPS_is_normalized=true)
             if step_control == :auto
-                # This is only really valid for Hermitian H
-                dE_prediction = norm_grad^2 * 2 * abs(step) * num_sites(M)
+                if hermitian
+                    dE_prediction = norm_grad^2 * 2 * abs(step) * num_sites(M)
+                else
+                    dE_prediction = norm_grad * 2 * abs(step) * num_sites(M)
+                end
                 dE = abs(En - En_prev)
                 if dE > dE_prediction * 10
                     step = max(step * 0.8, 0.001)
@@ -1006,7 +1010,11 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
             end
         end
         
-        println("$k, $norm_grad, $step, $En, $(En-En_prev)")
+        if hermitian
+            println("$k, $norm_grad, $step, $(real(En)), $(real(En-En_prev))")
+        else
+            println("$k, $norm_grad, $step, $En, $(En-En_prev)")
+        end
     end
     
     normalize!(M)
