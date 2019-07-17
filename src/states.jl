@@ -1002,10 +1002,10 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
                     dE_prediction = norm_grad * 2 * abs(step) * num_sites(M)
                 end
                 dE = abs(En - En_prev)
-                if dE > dE_prediction * 10
+                if dE > dE_prediction * 5 || dE < dE_prediction * 0.2
                     step = max(step * 0.8, 0.001)
-                elseif dE < dE_prediction * 0.1
-                    step = min(step * 1.1, 0.1)
+                else
+                    step = min(step * 1.05, 0.1)
                 end
             end
         end
