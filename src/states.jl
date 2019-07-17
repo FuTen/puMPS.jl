@@ -954,7 +954,7 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
 
     blkTMs = blockTMs(M)
     normalize!(M, blkTMs)
-    En = real(expect(M, hMPO, blkTMs=blkTMs))
+    En = expect(M, hMPO, blkTMs=blkTMs)
     
     grad_Ac = rand_MPSTensor(T, phys_dim(M), bond_dim(M)) #Used to initialise the BiCG solver
     stol = 1e-12
