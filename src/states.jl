@@ -523,12 +523,12 @@ function derivatives_1s(M::puMPState{T}, h::MPO_open{T};
     d_A
 end
 
-function eff_Ham_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Real=0.0) where {T}
+function eff_Ham_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T}}=blockTMs(M, num_sites(M)-1), e0::Number=0.0) where {T}
     A = mps_tensor(M)
     N = num_sites(M)
     D = bond_dim(M)
 
-    e0 = real(T)(e0) #will be used for scaling, so need it in the working precision
+    e0 = T(e0) #will be used for scaling, so need it in the working precision
     
     j = 1
     TM = blkTMs[j]
@@ -642,8 +642,8 @@ function vumps_opt!(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Integ
     N = num_sites(M)
     blkTMs = blockTMs(M)
     normalize!(M, blkTMs)
-    En = real(expect(M, hMPO, blkTMs=blkTMs))
-    
+    En = expect(M, hMPO, blkTMs=blkTMs)
+
     stol = 1e-12
     Ac_normgrad = Inf
 
@@ -659,7 +659,7 @@ function vumps_opt!(M::puMPState{T}, hMPO::MPO_open{T}, tol::Real; maxitr::Integ
         blkTMs = blockTMs(M)
         En_prev = En
         En = expect(M, hMPO, blkTMs=blkTMs)
-        Heff_Al = eff_Ham_1s(M, hMPO, blkTMs=blkTMs, e0=real(En))
+        Heff_Al = eff_Ham_1s(M, hMPO, blkTMs=blkTMs, e0=En)
         Heff_Ac, N_Ac, Heff_C, N_C = eff_Hams_Ac_C(M, Ci, Heff_Al, blkTMs[N-1])
 
         @tensor Ac_grad[V1,P,V2] := Heff_Ac[V1,P,V2, v1,p,v2] * Ac[v1,p,v2]
@@ -995,6 +995,7 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
             normalize!(M)
             En = expect(M, hMPO, MPS_is_normalized=true)
             if step_control == :auto
+                # This is only really valid for Hermitian H
                 dE_prediction = norm_grad^2 * 2 * abs(step) * num_sites(M)
                 dE = abs(En - En_prev)
                 if dE > dE_prediction * 10
