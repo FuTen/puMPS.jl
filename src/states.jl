@@ -884,13 +884,13 @@ function line_search_energy(M::puMPState{T}, En0::Number, grad::MPSTensor{T}, gr
         #println("Linesearch: $stp, $En")
 
         #Abort the search if the first step already increases the energy compared to the initial state
-        num_calls == 1 && real(En) > real(En0) && throw(EnergyHighException{T}(stp, En))
+        num_calls == 1 && real(En) > real(En0) && throw(EnergyHighException{real(T)}(stp, real(En)))
         
         #Note: This is the first Wolfe condition, plus a minimum step size, since we don't want to compute the gradient...
         #Probably it effectively only serves to reduce the maximum step size reached, thus we turn it off by setting wolfe_c1=100.
-        stp > 1e-2 && real(En) <= real(En0) - wolfe_c1 * stp * grad_normsq && throw(WolfeAbortException{T}(stp, En))
+        stp > 1e-2 && real(En) <= real(En0) - wolfe_c1 * stp * grad_normsq && throw(WolfeAbortException{real(T)}(stp, real(En)))
         
-        En
+        real(En)
     end
     
     step = Float64(step)
