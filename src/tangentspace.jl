@@ -393,10 +393,7 @@ function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vecto
 
     #Add I on the physical index. This is the same-site term.
     let E = Matrix{T}(I,d^L,d^L), blk = TM_convert(blkTMs[N-L])
-        GC.enable(false)
         @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = E[Pt,Pb] * blk[V2t,V2b, V1t,V1b]
-        GC.enable(true)
-        GC.gc(false)
         for j in 1:length(ks)
             axpy!(N, Gpart, Gs[j])
         end
@@ -409,31 +406,16 @@ function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vecto
         E = Matrix{T}(I,d^(L-j),d^(L-j))
         blk = TM_convert(blkTMs[N-L-j])
 
-        GC.enable(false)
         @tensor Gpart_pre[V1b,Pb,V2b, V1t,Pt,V2t] := Ablk[vt,Pb,V1t] * conj(Ablk[V2b,Pt,vb]) * blk[V2t,vb, vt,V1b]
-        GC.enable(true)
-        GC.gc(false)
-
         Gpart_r = reshape(Gpart, (D,d^j,d^(L-j),D, D,d^(L-j),d^j,D))
-        GC.enable(false)
         @tensor Gpart_r[V1b,Pb1,Pb2,V2b, V1t,Pt1,Pt2,V2t] = Gpart_pre[V1b,Pb1,V2b, V1t,Pt2,V2t] * E[Pb2,Pt1]
-        GC.enable(true)
-        GC.gc(false)
-
         for k in 1:length(ps)
             axpy!(N*cis(ps[k]*L), Gpart, Gs[k])
         end
 
-        GC.enable(false)
         @tensor Gpart_pre[V1b,Pb,V2b, V1t,Pt,V2t] = Ablk[V2t,Pb,vt] * blk[vt,V2b,V1t,vb] * conj(Ablk[vb,Pt,V1b])
-        GC.enable(true)
-        GC.gc(false)
-
         Gpart_r = reshape(Gpart, (D,d^(L-j),d^j,D, D,d^j,d^(L-j),D))
-        GC.enable(false)
         @tensor Gpart_r[V1b,Pb2,Pb1,V2b, V1t,Pt2,Pt1,V2t] = Gpart_pre[V1b,Pb1,V2b, V1t,Pt2,V2t] * E[Pb2,Pt1]
-        GC.enable(true)
-        GC.gc(false)
 
         for k in 1:length(ps)
             axpy!(N*cis(ps[k]*(N-L)), Gpart, Gs[k])
@@ -450,21 +432,12 @@ function tangent_space_metric(M::puMPState{T}, ks::Vector{<:Real}, blkTMs::Vecto
     right_T = zeros(T, (D,d,D, D,D))
     for i in 2L:N-2L
         blk = TM_convert(blkTMs[i-1])
-        GC.enable(false)
         @tensor left_T[V1b, V2t,V2b, V1t,Pt] = Ablk[V1t,Pt,vt] * blk[vt,V1b, V2t,V2b]
-        GC.enable(true)
-        GC.gc(false)
 
         blk = TM_convert(blkTMs[N-i-1])
-        GC.enable(false)
         @tensor right_T[V1t,Pb,V1b, V2t,V2b] = conj(Ablk[V1b,Pb,vb]) * blk[V1t,vb, V2t,V2b]
-        GC.enable(true)
-        GC.gc(false)
 
-        GC.enable(false)
         @tensor Gpart[V1b,Pb,V2b, V1t,Pt,V2t] = left_T[V2b, V1t,vb, vt,Pb] * right_T[V2t,Pt,vb, vt,V1b] #complete loop, cost O(d^2 * D^6)
-        GC.enable(true)
-        GC.gc(false)
         for j in 1:length(ps)
             axpy!(N*cis(ps[j]*i), Gpart, Gs[j])
         end
@@ -493,11 +466,8 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
     #This is essentially an MPO TM, but with a physical index on the left instead of an MPO index.
     op_1 = op[1]
     op_n = op[2]
-    GC.enable(false)
     @tensor blk_l[V1t,P,M1,V1b, V2t,M2,V2b] := ((((A[V1t,p1,vt] * op_1[M1,p1,m,P])
                                              * A[vt,p2t,V2t]) * op_n[m,p2t,M2,p2b]) * conj(A[V1b,p2b,V2b]))
-    GC.enable(true)
-    GC.gc(false)
 
     #We also need block TM's for the latter part of the Hamiltonian. We will add the gap on the left later.
     #We precompute these right blocks, since we will use the intermediates
@@ -512,10 +482,7 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
     #Same-site term
     blk_r = pop!(blks_r) #block for N-1 sites
     op_n = op[1]
-    GC.enable(false)
     @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] := op_n[m2,Pt,m1,Pb] * blk_r[V2t,m1,V2b, V1t,m2,V1b]
-    GC.enable(true)
-    GC.gc(false)
     for j in 1:length(ks)
         axpy!(N, part, op_effs[j])
     end
@@ -523,11 +490,8 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
     #Nearest-neighbour term with conjugate gap on the left, gap on the right. Conjugate gap is site 1.
     blk_r = pop!(blks_r) #block for N-2 sites
     op_1 = op[1]; op_n = op[2]
-    GC.enable(false)
     @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = (op_1[m3,pt,m1,Pb] * (A[vt,pt,V1t] *
                                                 (op_n[m1,Pt,m2,pb] * (conj(A[V2b,pb,vb]) * blk_r[V2t,m2,vb, vt,m3,V1b]))))
-    GC.enable(true)
-    GC.gc(false)
     for j in 1:length(ks)
         axpy!(N*cis(ps[j]), part, op_effs[j])
     end
@@ -536,11 +500,8 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
     for n in 3:N-1 #if conj(gap) is at site 1, gap is at site n
         blk_r = pop!(blks_r) #N-n sites
         op_n = op[n]
-        GC.enable(false)
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = blk_l[vt,Pb,m3,V2b, V1t,m1,vb1] *
                                                   (op_n[m1,Pt,m2,pb] * (conj(A[vb1,pb,vb2]) * blk_r[V2t,m2,vb2, vt,m3,V1b]))
-        GC.enable(true)
-        GC.gc(false)
         for j in 1:length(ks)
             axpy!(N*cis(ps[j]*(n-1)), part, op_effs[j])
         end
@@ -561,10 +522,7 @@ function tangent_space_MPO!(op_effs::Vector{Array{T,6}}, M::puMPState{T}, op::MP
     #Nearest-neighbour term with gap on the left, conjugate gap on the right. Conjugate gap is site 1.
 
     op_N = op[N]
-    GC.enable(false)
     @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = (blk_l[V2t,Pb,m2,V2b, V1t,m1,vb] * conj(A[vb,p,V1b])) * op_N[m1,Pt,m2,p]
-    GC.enable(true)
-    GC.gc(false)
     for j in 1:length(ks)
         axpy!(N*cis(ps[j]*(N-1)), part, op_effs[j])
     end
@@ -676,10 +634,7 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
     #On-site term
     blk = blockTM_MPO_boundary(M, op_b, blkTMs, 2, N)
     op_b_1 = op_term_MPO_boundary(M, op_b, 1)
-    GC.enable(false)
     @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] := blk[V2t,m2,V2b, V1t,m1,V1b] * op_b_1[m1,Pt,m2,Pb]
-    GC.enable(true)
-    GC.gc(false)
     for j in 1:length(ks)
         axpy!(N, part, op_effs[j])
     end
@@ -687,7 +642,6 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
     #NN-term 1, with conjugate gap (site 1) then gap
     blk = blockTM_MPO_boundary(M, op_b, blkTMs, 3, N)
     op_b_n = op_term_MPO_boundary(M, op_b, 2)
-    GC.enable(false)
     if length(op_b_n) == 0
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = op_b_1[m2,pt,m1,Pb] * (A[vt,pt,V1t] * (conj(A[V2b,Pt,vb])
                 * blk[V2t,m1,vb, vt,m2,V1b]))
@@ -695,8 +649,6 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = op_b_1[m3,pt,m1,Pb] *
         (A[vt,pt,V1t] * (op_b_n[m1,Pt,m2,pb] * (conj(A[V2b,pb,vb]) * blk[V2t,m2,vb, vt,m3,V1b])))
     end
-    GC.enable(true)
-    GC.gc(false)
     for j in 1:length(ks)
         axpy!(N*cis(ps[j]), part, op_effs[j])
     end
@@ -704,27 +656,18 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
     #gap at site n
     for n in 3:N-1
         blkL = blockTM_MPO_boundary(M, op_b, blkTMs, 2, n-1)
-        GC.enable(false)
         @tensor blkL_cgap[V1t,M1,P,V1b, V2t,M2,V2b] := op_b_1[M1,p,m,P] * (A[V1t,p,vt] * blkL[vt,m,V1b, V2t,M2,V2b])
-        GC.enable(true)
-        GC.gc(false)
 
         blkR = blockTM_MPO_boundary(M, op_b, blkTMs, n+1, N)
         op_b_n = op_term_MPO_boundary(M, op_b, n)
-        GC.enable(false)
         if length(op_b_n) == 0
             @tensor blkR_gap[V1t,P,M1,V1b, V2t,M2,V2b] := conj(A[V1b,P,vb]) * blkR[V1t,M1,vb, V2t,M2,V2b]
         else
             #Note: This is never called for a nearest-neighbour boundary Hamiltonian
             @tensor blkR_gap[V1t,P,M1,V1b, V2t,M2,V2b] := op_b_n[M1,P,m,p] * (conj(A[V1b,p,vb]) * blkR[V1t,m,vb, V2t,M2,V2b])
         end
-        GC.enable(true)
-        GC.gc(false)
 
-        GC.enable(false)
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = blkL_cgap[vt,m2,Pb,V2b, V1t,m1,vb] * blkR_gap[V2t,Pt,m1,vb, vt,m2,V1b]
-        GC.enable(true)
-        GC.gc(false)
         for j in 1:length(ks)
             axpy!(N*cis(ps[j]*(n-1)), part, op_effs[j])
         end
@@ -733,7 +676,6 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
     #NN-term 2, with gap (site N) then conjugate gap (site 1)
     blk = blockTM_MPO_boundary(M, op_b, blkTMs, 2, N-1)
     op_b_n = op_term_MPO_boundary(M, op_b, N)
-    GC.enable(false)
     if length(op_b_n) == 0
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = ((op_b_1[m2,pt,m1,Pb] * (A[V2t,pt,vt] * blk[vt,m1,V2b, V1t,m2,vb])) *
             conj(A[vb,Pt,V1b]))
@@ -741,8 +683,6 @@ function tangent_space_MPO_boundary!(op_effs::Vector{Array{T,6}}, M::puMPState{T
         @tensor part[V1b,Pb,V2b, V1t,Pt,V2t] = ((op_b_1[m3,pt,m1,Pb] * (A[V2t,pt,vt] * blk[vt,m1,V2b, V1t,m2,vb])) *
             conj(A[vb,pb,V1b])) * op_b_n[m2,Pt,m3,pb]
     end
-    GC.enable(true)
-    GC.gc(false)
     for j in 1:length(ks)
         axpy!(N*cis(ps[j]*(N-1)), part, op_effs[j])
     end
@@ -871,10 +811,7 @@ end
 
 function tspace_ops_to_center_gauge!(ops::Vector{Array{T,6}}, lambda_i::Matrix{T}) where {T}
     for op in ops
-        GC.enable(false)
         @tensor op[V1b,Pb,V2b, V1t,Pt,V2t] = lambda_i[vb,V2b] * (op[V1b,Pb,vb, V1t,Pt,vt] * lambda_i[vt,V2t])
-        GC.enable(true)
-        GC.gc(false)
     end
     ops
 end

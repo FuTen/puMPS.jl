@@ -135,10 +135,7 @@ function TM_convert(TM::MPS_MPO_TM{T})::MPS_TM{T} where {T}
 end
 
 function TM_dense(A::MPSTensor, B::MPSTensor)::MPS_MPO_TM
-    GC.enable(false)
     @tensor TM[lA,lB,rA,rB] := A[lA, s, rA] * conj(B[lB, s, rB]) #NOTE: This will generally allocate to do permutations!
-    GC.enable(true)
-    GC.gc(false)
     TM_convert(TM)
 end
 
@@ -221,18 +218,12 @@ end
 
 function applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
-    GC.enable(false)
     @tensor TM21[lA,lB, rA,rB] := (TM2[lA,lB, mA,mB] * conj(B1[mB,s,rB])) * A1[mA,s,rA] #NOTE: Intermediates, final permutation.
-    GC.enable(true)
-    GC.gc(false)
     TM_convert(TM21)
 end
 
 function applyTM_l(A::MPSTensor, B::MPSTensor, x::Matrix)
-    GC.enable(false)
     @tensor res[a, d] := conj(A[b, s, a]) * (x[b, c] * B[c, s, d]) #NOTE: This requires at least one intermediate array
-    GC.enable(true)
-    GC.gc(false)
     res
 end
 applyTM_l(A::MPSTensor, B::MPSTensor, x::Vector) = applyTM_l(A, B, reshape(x, (bond_dim(A), bond_dim(B))))
@@ -244,10 +235,7 @@ applyTM_r(A::MPSTensor, B::MPSTensor, x::Vector) = applyTM_r(A, B, reshape(x, (b
 
 function applyTM_r(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
     TM2 = TM_convert(TM2)
-    GC.enable(false)
     @tensor TM12[lA,lB, rA,rB] := conj(B1[lB,s,mB]) * (A1[lA,s,mA] * TM2[mA,mB, rA,rB]) #NOTE: Intermediates, final permutation.
-    GC.enable(true)
-    GC.gc(false)
     TM_convert(TM12)
 end
 
@@ -421,10 +409,7 @@ function tm_dominant_eigs(A::MPSTensor{T}, B::MPSTensor{T}; D_dense_max::Integer
 end
 
 function gauge_transform(A::MPSTensor, g::Matrix, gi::Matrix)
-    GC.enable(false)
     @tensor Anew[a,s,d] := g[a,b] * A[b,s,c] * gi[c,d] #NOTE: Requires a temporary array
-    GC.enable(true)
-    GC.gc(false)
     Anew
 end
 
@@ -475,26 +460,17 @@ end
 
 
 function TM_dense_MPO(A::MPSTensor, B::MPSTensor, o::MPOTensor)::MPS_MPO_TM
-    GC.enable(false)
     @tensor TM[k1,m1,b1, k2,m2,b2] := (A[k1, s1, k2] * o[m1,s1,m2,t1]) * conj(B[b1, t1, b2])
-    GC.enable(true)
-    GC.gc(false)
     TM
 end
 
 function applyTM_MPO_l(A::MPSTensor, B::MPSTensor, o::MPOTensor, TM2::MPS_MPO_TM)::MPS_MPO_TM
-    GC.enable(false)
     @tensor TM21[k1,m1,b1, k3,m3,b3] := ((TM2[k1,m1,b1, k2,m2,b2] * conj(B[b2, t2, b3])) * o[m2,s2,m3,t2]) * A[k2, s2, k3]
-    GC.enable(true)
-    GC.gc(false)
     TM21
 end
 
 function applyTM_MPO_r(A::MPSTensor, B::MPSTensor, o::MPOTensor, TM2::MPS_MPO_TM)::MPS_MPO_TM
-    GC.enable(false)
     @tensor TM12[k1,m1,b1, k3,m3,b3] :=  conj(B[b1, t1, b2]) * (o[m1,s1,m2,t1] * (A[k1, s1, k2] * TM2[k2,m2,b2, k3,m3,b3]))
-    GC.enable(true)
-    GC.gc(false)
     TM12
 end
 
