@@ -218,6 +218,69 @@ end
 
 LinearAlgebra.dot(psi::AbstractVector, M::puMPState) = conj(dot(M, psi))
 
+function subsystem_wavefunction(M::puMPState, num_sites::Int)
+    A = mps_tensor(M)
+    d = phys_dim(M)
+    D = bond_dim(M)
+
+    n = 1
+    init_block = A
+    while size(init_block, 2) < D^2 && n < num_sites
+        n += 1
+        @tensor init_block[l,p1,p2,r] := init_block[l,p1,i] * A[i,p2,r]
+        init_block = reshape(init_block, (D, d^n, D))
+    end
+    @tensor wf_sub[p,l,r] := init_block[l,p,r]
+    wf_sub = reshape(wf_sub, (d^n, D^2))
+
+    #if n > num_sites
+    #    @warn "Increasing num_sites to $n."
+    #    num_sites = n
+    #end
+
+    while true
+        F = qr(wf_sub)
+        # Discard isometry, since we don't care how to map from the physical
+        # to the virtual. We only care about the spectrum.
+        wf_sub = Matrix(F.R)
+        d_eff = size(wf_sub, 1)
+        wf_sub = reshape(wf_sub, (d_eff, D, D))
+
+        n == num_sites && break
+
+        @tensor wf_sub[p1,p2,l,r] := wf_sub[p1,l,i] * A[i,p2,r]
+        wf_sub = reshape(wf_sub, (d_eff * d, D^2))
+        n += 1
+    end
+
+    wf_sub
+end
+
+function pinch_map(M::puMPState, nL::Int, nM::Int)
+    A = mps_tensor(M)
+    N = num_sites(M)
+    nR = N - nL - nM
+    wf_sub_L = subsystem_wavefunction(M, nL)
+    wf_sub_R = subsystem_wavefunction(M, nR)
+
+    # middle section
+    @tensor pinch_map[lt,lb,rt,rb] := A[lt,p,rt] * A[rb,p,lb]
+    for n in 2:nM
+        @tensor pinch_map[lt,lb,rt,rb] = (pinch_map[lt,lb,it,ib] * A[it,p,rt]) * A[rb,p,ib]
+    end
+
+    @tensor pinch_map[lt,lb,p] := pinch_map[lt,lb,it,ib] * wf_sub_R[p,it,ib]
+    @tensor pinch_map[pl,pr] := wf_sub_L[pl,ib,it] * pinch_map[it,ib,pr]
+
+    pinch_map
+end
+
+function reduced_state(M::puMPState, interval::Int)
+    TM = TM_convert(blockTM_dense(M, num_sites(M) - interval))
+    wf_sub = subsystem_wavefunction(M, interval)
+    @tensor rho[p_out, p_in] := TM[lt,lb, rt,rb] * wf_sub[p_out, rt, lt] * conj(wf_sub[p_in, rb, lb])
+end
+
 """
     expect_nn(M::puMPState{Ts}, op::Array{Top,4}; MPS_is_normalized::Bool=true, blkTMs::Vector{MPS_MPO_TM{Ts}}=MPS_MPO_TM{Ts}[]) where {Ts, Top}
 
