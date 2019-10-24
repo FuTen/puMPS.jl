@@ -22,7 +22,8 @@ include("states.jl")
 
 export puMPSTvec, tvec_tensor, momentum, mps_tensors, excitations!, excitations, 
        tangent_space_metric_and_MPO, tangent_space_MPO,
-       Hn_in_basis, overlap, fidelity
+       Hn_in_basis, overlap, fidelity,
+       subsystem_wavefunction, pinch_map, reduced_state
 
 include("tangentspace.jl")
 
