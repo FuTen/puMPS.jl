@@ -1007,6 +1007,8 @@ For a nearest-neighbour Hamiltonian, `n=2`.
 function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Integer;
         tol::Real=1e-6,
         step::Real=0.001,
+        min_step::Real=0.001,
+        max_step::Real=0.1,
         step_control::Symbol=:gradientdescent,
         hermitian::Bool=true,
         grad_max_itr::Integer=500,
@@ -1048,7 +1050,7 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
         En_prev = En
 
         if step_control == :gradientdescent
-            step_corr = min(max(step, 0.001),0.1)
+            step_corr = min(max(step, min_step), max_step)
             step, En = line_search_energy(M, En, grad, norm_grad^2, step_corr, hMPO)
             Anew = mps_tensor(M) .- real(T)(step) .* grad
             set_mps_tensor!(M, Anew)
@@ -1059,16 +1061,18 @@ function minimize_energy_local!(M::puMPState{T}, hMPO::MPO_open{T}, maxitr::Inte
             normalize!(M)
             En = expect(M, hMPO, MPS_is_normalized=true)
             if step_control == :auto
+                # Work in progress. How best to choose
                 if hermitian
                     dE_prediction = norm_grad^2 * 2 * abs(step) * num_sites(M)
                 else
                     dE_prediction = norm_grad * 2 * abs(step) * num_sites(M)
                 end
                 dE = abs(En - En_prev)
-                if dE > dE_prediction * 5 || dE < dE_prediction * 0.2
-                    step = max(step * 0.8, 0.001)
+                if dE > dE_prediction * 10 || dE < dE_prediction * 0.1
+                    adj = abs(dE - dE_prediction) / dE_prediction * abs(step)
+                    step = max(step - adj, min_step)
                 else
-                    step = min(step * 1.05, 0.1)
+                    step = min(step * 1.02, max_step)
                 end
             end
         end
