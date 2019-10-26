@@ -152,13 +152,9 @@ function applyTM_op_nn_l(A1::MPSTensor, A2::MPSTensor, B1::MPSTensor, B2::MPSTen
     TM_convert(TM21)
 end
 
-#This is a workaround for StridedArray not including reshaped arrays formed from a FastContiguousSubArray in in Julia <= 0.6.
-#Since TensorOperations uses the StridedArray type, it misses these cases. Here, we use pointer manipulation to generate
-#views of sections of a vector with an arbitrary "size".
-function unsafe_reshaped_subvec(w::Vector{T}, ind1::Integer, sz::NTuple) where {T}
+function reshaped_subvec(w::Vector{T}, ind1::Integer, sz::NTuple) where {T}
     len = prod(sz)
-    @assert length(w) >= ind1+len-1 "Vector is not big enough to hold subarray by $(ind1+len-1 - length(w)) elements!"
-    unsafe_wrap(Array, pointer(w, ind1), sz)
+    reshape(view(w, ind1:ind1+len-1), sz)
 end
 
 function res_applyTM_l(A1::MPSTensor{T}, B1::MPSTensor{T}, TM2::MPS_MPO_TM{T}) where {T}
@@ -196,20 +192,20 @@ function applyTM_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2
 
     wsz1 = (size(TM2)[1:3]..., size(B1)[2:3]...)
     wlen1 = prod(wsz1)
-    TM2B1 = unsafe_reshaped_subvec(work, 1, wsz1)
+    TM2B1 = reshaped_subvec(work, 1, wsz1)
     @tensor TM2B1[lA,lB, mA,s,rB] = TM2[lA,lB, mA,mB] * conj(B1[mB,s,rB])
     
     wsz2 = (wsz1[1:2]..., wsz1[5], wsz1[3:4]...)
     wlen2 = prod(wsz2)
-    TM2B1p = unsafe_reshaped_subvec(work, wlen1+1, wsz2) #take work vector section after TM2B1 storage
+    TM2B1p = reshaped_subvec(work, wlen1+1, wsz2) #take work vector section after TM2B1 storage
     @tensor TM2B1p[lA,lB, rB,mA,s] = TM2B1[lA,lB, mA,s,rB]
-    TM2B1p_copy = unsafe_reshaped_subvec(work, 1, wsz2)
+    TM2B1p_copy = reshaped_subvec(work, 1, wsz2)
     copyto!(TM2B1p_copy, TM2B1p)
     TM2B1p = TM2B1p_copy
     
     TM2sz = size(TM2)
     wsz3 = (TM2sz[1:2]..., size(B1)[3], size(A1,3))
-    TM21p = unsafe_reshaped_subvec(work, wlen2+1, wsz3)
+    TM21p = reshaped_subvec(work, wlen2+1, wsz3)
     @tensor TM21p[lA,lB, rB,rA] = TM2B1p[lA,lB, rB,mA,s] * A1[mA,s,rA]
     @tensor TM21c[lA,lB, rA,rB] = TM21p[lA,lB, rB,rA]
     
@@ -245,20 +241,20 @@ function applyTM_r!(TM12::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T}, TM2
 
     wsz1 = (size(A1)[1:2]..., size(TM2)[2:4]...)
     wlen1 = prod(wsz1)
-    A1TM2 = unsafe_reshaped_subvec(work, 1, wsz1)
+    A1TM2 = reshaped_subvec(work, 1, wsz1)
     @tensor A1TM2[lA,s,mB, rA,rB] = A1[lA,s,mA] * TM2[mA,mB, rA,rB]
     
     wsz2 = (wsz1[2:3]..., wsz1[1], wsz1[4:5]...)
     wlen2 = prod(wsz2)
-    A1TM2p = unsafe_reshaped_subvec(work, wlen1+1, wsz2) #take work vector section after TM2B1 storage
+    A1TM2p = reshaped_subvec(work, wlen1+1, wsz2) #take work vector section after TM2B1 storage
     @tensor A1TM2p[s,mB,lA, rA,rB] = A1TM2[lA,s,mB, rA,rB]
-    A1TM2p_copy = unsafe_reshaped_subvec(work, 1, wsz2)
+    A1TM2p_copy = reshaped_subvec(work, 1, wsz2)
     copyto!(A1TM2p_copy, A1TM2p)
     A1TM2p = A1TM2p_copy
     
     TM12sz = size(TM12c)
     wsz3 = (TM12sz[2], TM12sz[1], TM12sz[3:4]...)
-    TM12p = unsafe_reshaped_subvec(work, wlen2+1, wsz3)
+    TM12p = reshaped_subvec(work, wlen2+1, wsz3)
     @tensor TM12p[lB,lA, rA,rB] = conj(B1[lB,s,mB]) * A1TM2p[s,mB,lA, rA,rB]
 
     @tensor TM12c[lA,lB, rA,rB] = TM12p[lB,lA, rA,rB]
@@ -541,10 +537,10 @@ function applyTM_MPO_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T},
     wsz2 = (wsz1[1:4]..., wsz1[7], wsz1[5:6]...)
     wlen2 = prod(wsz2)
     
-    TM2B1 = unsafe_reshaped_subvec(work, wlen2+1, wsz1)
+    TM2B1 = reshaped_subvec(work, wlen2+1, wsz1)
     @tensor TM2B1[k1,m1,b1, k2,m2,t2,b3] = TM2[k1,m1,b1, k2,m2,b2] * conj(B1[b2, t2, b3])
     
-    TM2B1p = unsafe_reshaped_subvec(work, 1, wsz2)
+    TM2B1p = reshaped_subvec(work, 1, wsz2)
     @tensor TM2B1p[k1,m1,b1, k2,b3, m2,t2] = TM2B1[k1,m1,b1, k2,m2,t2,b3]
     
     opsz = size(o)
@@ -554,10 +550,10 @@ function applyTM_MPO_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T},
     wsz4 = (wsz2[1:5]..., wsz3[3:4]...)
     wlen4 = prod(wsz4)
     
-    op = unsafe_reshaped_subvec(work, wlen1+1, wsz3)
+    op = reshaped_subvec(work, wlen1+1, wsz3)
     @tensor op[m2,t2,s2,m3] = o[m2,s2,m3,t2]
     
-    TM2B1pop = unsafe_reshaped_subvec(work, wlen1+wlen3+1, wsz4)
+    TM2B1pop = reshaped_subvec(work, wlen1+wlen3+1, wsz4)
     @tensor TM2B1pop[k1,m1,b1, k2,b3, s2,m3] = TM2B1p[k1,m1,b1, k2,b3, m2,t2] * op[m2,t2,s2,m3]
     
     wsz5 = (wsz4[1:3]..., wsz4[5], wsz4[7], wsz4[4], wsz4[6])
@@ -571,13 +567,13 @@ function applyTM_MPO_l!(TM21::MPS_MPO_TM{T}, A1::MPSTensor{T}, B1::MPSTensor{T},
     else
         ind5 = wlen1+wlen3+wlen4+1
     end
-    TM2B1pop_p = unsafe_reshaped_subvec(work, ind5, wsz5)
+    TM2B1pop_p = reshaped_subvec(work, ind5, wsz5)
     @tensor TM2B1pop_p[k1,m1,b1, b3, m3, k2,s2] = TM2B1pop[k1,m1,b1, k2,b3, s2,m3]
     
     if ind5 == 1 || wlen6 >= ind5
-        TM21p = unsafe_reshaped_subvec(work, wlen5+ind5, wsz6)
+        TM21p = reshaped_subvec(work, wlen5+ind5, wsz6)
     else
-        TM21p = unsafe_reshaped_subvec(work, 1, wsz6)
+        TM21p = reshaped_subvec(work, 1, wsz6)
     end
     @tensor TM21p[k1,m1,b1, b3,m3,k3] = TM2B1pop_p[k1,m1,b1, b3,m3, k2,s2] * A1[k2,s2, k3]
     
@@ -654,22 +650,22 @@ function applyTM_MPO_r!(TM21::MPS_MPO_TM{T}, A::MPSTensor{T}, B::MPSTensor{T}, o
     ATM2_sz, ATM2p_sz, op_sz, oATM2_sz, oATM2p_sz, TM21p_sz = szs
     ATM2_ind, ATM2p_ind, op_ind, oATM2_ind, oATM2p_ind, TM21p_ind = inds
     
-    ATM2 = unsafe_reshaped_subvec(work, ATM2_ind, ATM2_sz)
+    ATM2 = reshaped_subvec(work, ATM2_ind, ATM2_sz)
     @tensor ATM2[k1,s1, m2,b2, k3,m3,b3] = A[k1, s1, k2] * TM2[k2,m2,b2, k3,m3,b3]
     
-    ATM2p = unsafe_reshaped_subvec(work, ATM2p_ind, ATM2p_sz)
+    ATM2p = reshaped_subvec(work, ATM2p_ind, ATM2p_sz)
     @tensor ATM2p[s1,m2, k1, b2, k3,m3,b3] = ATM2[k1,s1, m2,b2, k3,m3,b3]
     
-    op = unsafe_reshaped_subvec(work, op_ind, op_sz)
+    op = reshaped_subvec(work, op_ind, op_sz)
     @tensor op[m1,t1,s1,m2] = o[m1,s1,m2,t1]
     
-    oATM2 = unsafe_reshaped_subvec(work, oATM2_ind, oATM2_sz)
+    oATM2 = reshaped_subvec(work, oATM2_ind, oATM2_sz)
     @tensor oATM2[m1,t1, k1, b2, k3,m3,b3] = op[m1,t1,s1,m2] * ATM2p[s1,m2, k1, b2, k3,m3,b3]
     
-    oATM2p = unsafe_reshaped_subvec(work, oATM2p_ind, oATM2p_sz)
+    oATM2p = reshaped_subvec(work, oATM2p_ind, oATM2p_sz)
     @tensor oATM2p[t1,b2, m1, k1, k3,m3,b3] = oATM2[m1,t1, k1, b2, k3,m3,b3]
     
-    TM21p = unsafe_reshaped_subvec(work, TM21p_ind, TM21p_sz)
+    TM21p = reshaped_subvec(work, TM21p_ind, TM21p_sz)
     @tensor TM21p[b1, m1, k1, k3,m3,b3] = conj(B[b1, t1, b2]) * oATM2p[t1,b2, m1, k1, k3,m3,b3]
     
     @tensor TM21[k1,m1,b1, k3,m3,b3] = TM21p[b1, m1, k1, k3,m3,b3]
