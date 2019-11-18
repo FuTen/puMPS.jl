@@ -548,10 +548,9 @@ function derivatives_1s(M::puMPState{T}, h::MPO_open{T};
     
     TM_H_res = similar(TM_H)    
     
-    work = workvec_applyTM_l(A, A)
-    
     TMMPO_res = res_applyTM_MPO_l(M, h, TM)
-    workMPO = workvec_applyTM_MPO_l(M, h, vcat(MPS_MPO_TM{T}[TM], TMMPO_res[1:end-1]))
+    work = workvec_applyTM_MPO_l(M, h, vcat(MPS_MPO_TM{T}[TM], TMMPO_res[1:end-1]))
+    work = workvec_applyTM_l!(work, A, A, TM_H)
     
     for k in length(h)+1:N-1 #leave out one site (where we take the derivative)
         #Extend TM_H
@@ -559,7 +558,7 @@ function derivatives_1s(M::puMPState{T}, h::MPO_open{T};
         TM_H, TM_H_res = (TM_H_res, TM_H)
         
         #New H term
-        TM_H_add = applyTM_MPO_l!(TMMPO_res, M, h, TM, workMPO)
+        TM_H_add = applyTM_MPO_l!(TMMPO_res, M, h, TM, work)
         axpy!(-e0, blkTMs[j+length(h)], TM_H_add) #Subtract energy density e0 * I
         
         j += 1
@@ -577,8 +576,8 @@ function derivatives_1s(M::puMPState{T}, h::MPO_open{T};
     
     #NOTE: TM now has N-length(h) sites
     for n in 1:length(h)
-        TM_H = applyTM_MPO_l(M, h[1:n-1], TM, work=workMPO)
-        TM_H = applyTM_MPO_r(M, h[n+1:end], TM_H, work=workMPO)
+        TM_H = applyTM_MPO_l(M, h[1:n-1], TM, work=work)
+        TM_H = applyTM_MPO_r(M, h[n+1:end], TM_H, work=work)
         hn = h[n]
         @tensor d_A[l, t, r] += (A[k1, s, k2] * TM_H[k2,m2,r, k1,m1,l]) * hn[m1,s,m2,t] #allocates temporaries
     end
@@ -608,10 +607,9 @@ function eff_Ham_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T
     
     TM_H_res = similar(TM_H)    
     
-    work = workvec_applyTM_l(A, A)
-    
     TMMPO_res = res_applyTM_MPO_l(M, h, TM)
-    workMPO = workvec_applyTM_MPO_l(M, h, vcat(MPS_MPO_TM{T}[TM], TMMPO_res[1:end-1]))
+    work = workvec_applyTM_MPO_l(M, h, vcat(MPS_MPO_TM{T}[TM], TMMPO_res[1:end-1]))
+    work = workvec_applyTM_l!(work, A, A, TM_H)
     
     for k in length(h)+1:N-1 #leave out one site (where we take the derivative)
         #Extend TM_H
@@ -619,7 +617,7 @@ function eff_Ham_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T
         TM_H, TM_H_res = (TM_H_res, TM_H)
         
         #New H term
-        TM_H_add = applyTM_MPO_l!(TMMPO_res, M, h, TM, workMPO)
+        TM_H_add = applyTM_MPO_l!(TMMPO_res, M, h, TM, work)
         axpy!(-e0, blkTMs[j+length(h)], TM_H_add) #Subtract energy density e0 * I
         
         j += 1
@@ -638,8 +636,8 @@ function eff_Ham_1s(M::puMPState{T}, h::MPO_open{T}; blkTMs::Vector{MPS_MPO_TM{T
     
     #NOTE: TM now has N-length(h) sites
     for n in 1:length(h)
-        TM_H = applyTM_MPO_l(M, h[1:n-1], TM, work=workMPO)
-        TM_H = applyTM_MPO_r(M, h[n+1:end], TM_H, work=workMPO)
+        TM_H = applyTM_MPO_l(M, h[1:n-1], TM, work=work)
+        TM_H = applyTM_MPO_r(M, h[n+1:end], TM_H, work=work)
         hn = h[n]
         @tensor Heff[Vb1, Pb, Vb2, Vt1, Pt, Vt2] += TM_H[Vt2,m2,Vb2, Vt1,m1,Vb1] * hn[m1,Pt,m2,Pb]
     end
