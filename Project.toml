@@ -3,6 +3,13 @@ uuid = "c1f75eec-112d-47a9-8901-3595a80a6981"
 authors = ["Yijian Zou", "Ashley Milsted", "Jan T Schneider"]
 version = "1.0.0-DEV"
 
+[deps]
+KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LinearMaps = "7a12625a-238d-50fd-b39a-03d52299707e"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+TensorOperations = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
+
 [compat]
 julia = "1"
 

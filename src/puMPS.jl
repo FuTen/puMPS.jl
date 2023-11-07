@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-module puMPS
-
-# Write your package code here.
-=======
 
 module puMPS
 
@@ -38,6 +33,5 @@ export ising_local_MPO, ising_PBC_MPO, ising_PBC_MPO_split, ising_OBC_MPO, ising
        potts3_local_MPO, potts3_OBC_MPO, potts3_PBC_MPO_split, potts3_Hn_MPO_split
 
 include("models.jl")
->>>>>>> 103cb1a03a863c40240f0c6a192ec2cd7cc954e7
 
 end
