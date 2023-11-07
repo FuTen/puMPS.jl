@@ -1,0 +1,13 @@
+name = "puMPS"
+uuid = "c1f75eec-112d-47a9-8901-3595a80a6981"
+authors = ["Yijian Zou", "Ashley Milsted", "Jan T Schneider"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
