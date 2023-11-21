@@ -124,7 +124,7 @@ MPS_TM{T} = Array{T,4}
 
 #Note: We will generally use MPS_MPO_TM for function arguments, providing functions to convert where possible.
 
-LinearAlgebra.tr(TM::MPS_MPO_TM{T}) where {T} = scalar(@tensor res[] := TM[t,m,b,t,m,b])
+LinearAlgebra.tr(TM::MPS_MPO_TM{T}) where {T} = @tensor TM[t,m,b,t,m,b]
 
 #Turn the MPS TM into an MPS TM with (size 1) MPO indices
 TM_convert(TM::MPS_TM{T}) where {T} = reshape(TM, (size(TM,1),1,size(TM,2), size(TM,3),1,size(TM,4)))::MPS_MPO_TM{T}
@@ -334,14 +334,15 @@ function tm_eigs_sparse(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::Int
     ev, eVm
 end
 
-function tm_eigs_dense(A::MPSTensor{T}, B::MPSTensor{T}) where {T}
+function tm_eigs_dense(A::MPSTensor{T}, B::MPSTensor{T}) where {T}()
     TM = TM_dense(A, B)
     
     DA = bond_dim(A)
     DB = bond_dim(B)
     
     TM = reshape(TM, (DA*DB,DA*DB))
-    ev, eVr = eigen(TM)
+    # TM_H = 0.5*(TM + TM')
+    ev, eVr = eigen(Hermitian(TM);sortby=real)
     eVl = inv(eVr)'
     
     eVmr = Matrix[reshape(eVr[:,j], (DA,DB)) for j in 1:size(eVr, 2)]

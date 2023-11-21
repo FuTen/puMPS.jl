@@ -837,7 +837,7 @@ function gradient_central(M::puMPState{T}, inv_lambda::AbstractMatrix{T}, d_A::M
     
     norm_grad_A = sqrt(abs(dot(vec(grad_A), vec(d_A))))
     
-    grad_A, norm_grad_A, tensorcopy(grad_Ac, [:a,:b,:c], [:a,:c,:b])
+    return grad_A, norm_grad_A, tensorcopy(grad_Ac, [1,3,2])
 end
 
 struct EnergyHighException{T<:Real} <: Exception
