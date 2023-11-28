@@ -334,7 +334,7 @@ function tm_eigs_sparse(A::MPSTensor{T}, B::MPSTensor{T}, dirn::Symbol, nev::Int
     ev, eVm
 end
 
-function tm_eigs_dense(A::MPSTensor{T}, B::MPSTensor{T}) where {T}()
+function tm_eigs_dense(A::MPSTensor{T}, B::MPSTensor{T}) where {T}
     TM = TM_dense(A, B)
     
     DA = bond_dim(A)
